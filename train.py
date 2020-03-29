@@ -20,9 +20,11 @@ from model.trainer import GCNTrainer
 from utils import torch_utils, scorer, constant, helper
 from utils.vocab import Vocab
 
+
+cwd = "/Volumes/External HDD/"
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', type=str, default='dataset/tacred')
-parser.add_argument('--vocab_dir', type=str, default='dataset/vocab')
+parser.add_argument('--data_dir', type=str, default=os.path.join(cwd, 'dataset/tacred/data/json'))
+parser.add_argument('--vocab_dir', type=str, default=os.path.join(cwd, 'dataset/tacred/data/vocab'))
 parser.add_argument('--emb_dim', type=int, default=300, help='Word embedding dimension.')
 parser.add_argument('--ner_dim', type=int, default=30, help='NER embedding dimension.')
 parser.add_argument('--pos_dim', type=int, default=30, help='POS embedding dimension.')
@@ -159,10 +161,13 @@ for epoch in range(1, opt['num_epoch']+1):
     dev_loss = dev_loss / dev_batch.num_examples * opt['batch_size']
 
     dev_p, dev_r, dev_f1 = scorer.score(dev_batch.gold(), predictions)
-    print("epoch {}: train_loss = {:.6f}, dev_loss = {:.6f}, dev_f1 = {:.4f}".format(epoch,\
-        train_loss, dev_loss, dev_f1))
+    print("epoch {}: train_loss = {:.6f}, dev_loss = {:.6f}, dev_f1 = {:.4f}".format(epoch,
+                                                                                     train_loss,
+                                                                                     dev_loss,
+                                                                                     dev_f1))
     dev_score = dev_f1
-    file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}\t{:.4f}".format(epoch, train_loss, dev_loss, dev_score, max([dev_score] + dev_score_history)))
+    file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}\t{:.4f}".format(epoch, train_loss, dev_loss, dev_score,
+                                                                max([dev_score] + dev_score_history)))
 
     # save
     model_file = model_save_dir + '/checkpoint_epoch_{}.pt'.format(epoch)

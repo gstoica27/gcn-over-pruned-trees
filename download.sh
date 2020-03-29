@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd dataset; mkdir glove
+cd /Volumes/External\ HDD/dataset; mkdir glove
 cd glove
 
 echo "==> Downloading glove vectors..."

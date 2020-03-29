@@ -40,7 +40,7 @@ class DataLoader(object):
         print("{} batches created for {}".format(len(data), filename))
 
     def preprocess(self, data, vocab, opt):
-        """ Preprocess the data and convert to ids. """
+        """ Preprocess the data and convert to ids. ids are embedding lookup ids for each corresponding component"""
         processed = []
         for d in data:
             tokens = list(d['token'])
@@ -120,8 +120,7 @@ def map_to_ids(tokens, vocab):
 
 def get_positions(start_idx, end_idx, length):
     """ Get subj/obj position sequence. """
-    return list(range(-start_idx, 0)) + [0]*(end_idx - start_idx + 1) + \
-            list(range(1, length-end_idx))
+    return list(range(-start_idx, 0)) + [0]*(end_idx - start_idx + 1) + list(range(1, length-end_idx))
 
 def get_long_tensor(tokens_list, batch_size):
     """ Convert list of list of tokens to a padded LongTensor. """
