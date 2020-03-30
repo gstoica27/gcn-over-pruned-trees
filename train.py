@@ -189,6 +189,7 @@ test_metrics_at_best_dev = defaultdict(lambda: -np.inf)
 for epoch in range(1, opt['num_epoch']+1):
     train_loss = 0
     for i, batch in enumerate(train_batch):
+    # for i in range(0):
         start_time = time.time()
         global_step += 1
         losses = trainer.update(batch)

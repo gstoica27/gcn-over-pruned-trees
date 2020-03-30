@@ -68,9 +68,9 @@ def maybe_place_batch_on_cuda(batch, cuda):
         labels = labels.cuda()
         for name, data in batch['supplemental'].items():
             batch['supplemental'][name] = [component.cuda() for component in data]
-
+    orig_idx = batch['base'][11]
     batch['base'] = base_batch
-    return batch, labels#, orig_idx
+    return batch, labels, orig_idx
 
 class GCNTrainer(Trainer):
     def __init__(self, opt, emb_matrix=None):
@@ -87,7 +87,7 @@ class GCNTrainer(Trainer):
     def update(self, batch):
         losses = {}
         # inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
-        inputs, labels = maybe_place_batch_on_cuda(batch, cuda=self.opt['cuda'])
+        inputs, labels, _ = maybe_place_batch_on_cuda(batch, cuda=self.opt['cuda'])
         # step forward
         self.model.train()
         self.optimizer.zero_grad()
@@ -126,8 +126,8 @@ class GCNTrainer(Trainer):
 
     def predict(self, batch, unsort=True):
         # inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
-        inputs, labels = maybe_place_batch_on_cuda(batch, cuda=self.opt['cuda'])
-        orig_idx = batch[11]
+        inputs, labels, orig_idx = maybe_place_batch_on_cuda(batch, cuda=self.opt['cuda'])
+        # orig_idx = batch[11]
         # forward
         self.model.eval()
         logits, _, _ = self.model(inputs)
