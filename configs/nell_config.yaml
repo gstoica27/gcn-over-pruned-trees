@@ -44,8 +44,8 @@ model_file:
 kg_loss:
   model: 'ConvE'
   label_smoothing: .1
-  lambda: 1.
-  vocab_path: '/Volumes/External HDD/dataset/tacred/data/json'
+  lambda: .1
+  vocab_path: '/usr0/home/gis/data/tacred/data/json'
   freeze_embeddings: False
 
 
