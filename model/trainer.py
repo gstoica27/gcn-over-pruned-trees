@@ -31,12 +31,12 @@ class Trainer(object):
             print("Cannot load model from {}".format(filename))
             exit()
         self.model.load_state_dict(checkpoint['model'])
-        self.opt = checkpoint['config']
+        self.opt = checkpoint['configs']
 
     def save(self, filename, epoch):
         params = {
                 'model': self.model.state_dict(),
-                'config': self.opt,
+                'configs': self.opt,
                 }
         try:
             torch.save(params, filename)
@@ -116,12 +116,13 @@ class GCNTrainer(Trainer):
             # kg_loss = self.kg_criterion(batch_inputs=inputs, relations=sentence_encs)
             # cumulative_loss += self.opt['kg_loss']['lambda'] * kg_loss.sum()
             # losses['kg'] = kg_loss.data.item()
-        loss_val = cumulative_loss.item()
+        # loss_val = cumulative_loss.item()
         # backward
         cumulative_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.opt['max_grad_norm'])
         self.optimizer.step()
-        return loss_val
+        losses['cumulative'] = cumulative_loss.data.item()
+        return losses
 
     def predict(self, batch, unsort=True):
         # inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])

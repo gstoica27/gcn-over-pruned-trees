@@ -89,7 +89,7 @@ def add_kg_model_params(cfg_dict):
 
 cwd = os.getcwd()
 on_server = 'Desktop' not in cwd
-config_path = os.path.join(cwd, 'configs', f'model_config{"_nell" if on_server else ""}.yaml')
+config_path = os.path.join(cwd, 'configs', f'{"nell" if on_server else "local"}_config.yaml')
 
 with open(config_path, 'r') as file:
     cfg_dict = yaml.load(file)
@@ -132,6 +132,9 @@ emb_matrix = np.load(emb_file)
 assert emb_matrix.shape[0] == vocab.size
 assert emb_matrix.shape[1] == opt['emb_dim']
 
+opt['subj_idxs'] = vocab.subj_idxs
+opt['obj_idxs'] = vocab.obj_idxs
+
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
 train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'],
@@ -146,8 +149,8 @@ model_save_dir = opt['save_dir'] + '/' + model_id
 opt['model_save_dir'] = model_save_dir
 helper.ensure_dir(model_save_dir, verbose=True)
 
-# save config
-helper.save_config(opt, model_save_dir + '/config.json', verbose=True)
+# save configs
+helper.save_config(opt, model_save_dir + '/configs.json', verbose=True)
 vocab.save(model_save_dir + '/vocab.pkl')
 file_logger = helper.FileLogger(model_save_dir + '/' + opt['log'],
                                 header="# epoch\ttrain_loss\tdev_loss\tdev_score\tbest_dev_score")
@@ -177,7 +180,7 @@ current_lr = opt['lr']
 
 global_step = 0
 global_start_time = time.time()
-format_str = '{}: step {}/{} (epoch {}/{}), loss = {:.6f} ({:.3f} sec/batch), lr: {:.6f}'
+format_str = '{}: step {}/{} (epoch {}/{}), ({:.3f} sec/batch), lr: {:.6f}'
 max_steps = len(train_batch) * opt['num_epoch']
 best_dev_metrics = defaultdict(lambda: -np.inf)
 test_metrics_at_best_dev = defaultdict(lambda: -np.inf)

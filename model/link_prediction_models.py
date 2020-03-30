@@ -75,7 +75,7 @@ class ConvE(torch.nn.Module):
     def __init__(self, args):
         super(ConvE, self).__init__()
         self.emb_e = torch.nn.Embedding(args['num_entities'],
-                                        args['embedding_dim'])
+                                        args['ent_emb_dim'])
         # self.emb_rel = torch.nn.Embedding(args['num_relations'],
         #                                   args['embedding_dim'])
 
@@ -83,24 +83,28 @@ class ConvE(torch.nn.Module):
         self.hidden_drop = torch.nn.Dropout(args['hidden_drop'])
         self.feature_map_drop = torch.nn.Dropout2d(args['feat_drop'])
         self.loss = torch.nn.BCELoss()
-        self.emb_dim1 = args['embedding_shape1']
-        self.emb_dim2 = args['embedding_dim'] // self.emb_dim1
+        self.ent_emb_dim1 = args['ent_emb_shape1']
+        self.ent_emb_dim2 = args['ent_emb_dim'] // self.ent_emb_dim1
+        self.rel_emb_dim1 = args['rel_emb_shape1']
+        self.rel_emb_dim2 = args['rel_emb_dim'] // self.rel_emb_dim1
+
         self.kernel_size = eval(args['kernel_size'])
         self.filter_channels = args['filter_channels']
         self.stride = args['stride']
         self.padding = args['padding']
-        self.embedding_dim = args['embedding_dim']
+        self.ent_emb_dim = args['ent_emb_dim']
+        self.rel_emb_dim = args['rel_emb_dim']
         self.conv1 = torch.nn.Conv2d(1, self.filter_channels, self.kernel_size,
                                      self.stride, self.padding, bias=args['use_bias'])
-        output_width = 2*self.emb_dim1 - self.kernel_size[0] + 1
-        output_height = self.emb_dim2 - self.kernel_size[1] + 1
+        output_width = (self.ent_emb_dim1 + self.rel_emb_dim1) - self.kernel_size[0] + 1
+        output_height = self.ent_emb_dim2 - self.kernel_size[1] + 1
         output_size = output_height * output_width * self.filter_channels
         self.bn0 = torch.nn.BatchNorm2d(1)
         self.bn1 = torch.nn.BatchNorm2d(32)
-        self.bn2 = torch.nn.BatchNorm1d(args['embedding_dim'])
+        self.bn2 = torch.nn.BatchNorm1d(args['ent_emb_dim'])
         # offset b/c we don't include subjects in calculation
         self.register_parameter('b', Parameter(torch.zeros((args['num_entities'] - 2))))
-        self.fc = torch.nn.Linear(output_size,args['embedding_dim'])
+        self.fc = torch.nn.Linear(output_size,args['ent_emb_dim'])
         # load model if exists
         # if args['load_path'] is not None:
         #     self.load_model(args['load_path'])
@@ -111,10 +115,10 @@ class ConvE(torch.nn.Module):
     def forward(self, e1, rel, e2s):
         #print('Are cuda? | e1: {} | emb_e: {} | rel: {}'.format(e1.is_cuda, self.emb_e.weight.is_cuda, rel.is_cuda))
         # e1_embedded = self.emb_e(e1).view(-1, 1, self.emb_dim1, self.emb_dim2)
-        e1_embedded = e1.view(-1, 1, self.emb_dim1, self.emb_dim2)
+        e1_embedded = e1.view(-1, 1, self.ent_emb_dim1, self.ent_emb_dim2)
         # rel_embedded = self.emb_rel(rel).view(-1, 1, self.emb_dim1, self.emb_dim2)
         # Assume relation is already encoded form RE model
-        rel_embedded = rel.view(-1, 1, self.emb_dim1, self.emb_dim2)
+        rel_embedded = rel.view(-1, 1, self.rel_emb_dim1, self.rel_emb_dim2)
         stacked_inputs = torch.cat([e1_embedded, rel_embedded], 2)
 
         stacked_inputs = self.bn0(stacked_inputs)

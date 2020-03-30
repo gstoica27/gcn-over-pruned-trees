@@ -134,7 +134,7 @@ def save(model, optimizer, opt, filename):
     params = {
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),
-        'config': opt
+        'configs': opt
     }
     try:
         torch.save(params, filename)
@@ -150,7 +150,7 @@ def load(model, optimizer, filename):
         model.load_state_dict(dump['model'])
     if optimizer is not None:
         optimizer.load_state_dict(dump['optimizer'])
-    opt = dump['config']
+    opt = dump['configs']
     return model, optimizer, opt
 
 def load_config(filename):
@@ -158,5 +158,5 @@ def load_config(filename):
         dump = torch.load(filename)
     except BaseException:
         print("[ Fail: model loading failed. ]")
-    return dump['config']
+    return dump['configs']
 

@@ -59,7 +59,7 @@ class GCNRelationModel(nn.Module):
         # KG Model
         if opt['kg_loss'] is not None:
             self.rel_emb = nn.Embedding(opt['kg_loss']['model']['num_relations'],
-                                        opt['kg_loss']['model']['embedding_dim'])
+                                        opt['kg_loss']['model']['rel_emb_dim'])
             self.object_indexes = torch.from_numpy(np.array(opt['obj_idxs']))
             if opt['cuda']:
                 self.object_indexes = self.object_indexes.cuda()
@@ -80,6 +80,7 @@ class GCNRelationModel(nn.Module):
             self.emb_matrix = torch.from_numpy(self.emb_matrix)
             self.emb.weight.data.copy_(self.emb_matrix)
         # decide finetuning
+        self.opt['topn'] = float(self.opt.get('topn', 1e10))
         if self.opt['topn'] <= 0:
             print("Do not finetune word embedding layer.")
             self.emb.weight.requires_grad = False
@@ -131,8 +132,7 @@ class GCNRelationModel(nn.Module):
             relation_kg_loss = self.kg_model.loss(relation_kg_preds, labels)
             sentence_kg_preds = self.kg_model.loss(sentence_kg_preds, labels)
             supplemental_losses = {'relation':relation_kg_loss, 'sentence': sentence_kg_preds}
-            # Remove gradient from flowing to the relation embeddings in the main loss calculation
-            logits = torch.mm(outputs, self.rel_emb.weight.transpose(1, 0).detach())
+            logits = torch.mm(outputs, self.rel_emb.weight.transpose(1, 0))
             #logits += self.class_bias
         else:
             supplemental_losses = {}
@@ -178,14 +178,15 @@ class GCN(nn.Module):
 
     def encode_with_rnn(self, rnn_inputs, masks, batch_size):
         seq_lens = list(masks.data.eq(constant.PAD_ID).long().sum(1).squeeze())
-        h0, c0 = rnn_zero_state(batch_size, self.opt['rnn_hidden'], self.opt['rnn_layers'])
+        h0, c0 = rnn_zero_state(batch_size, self.opt['rnn_hidden'], self.opt['rnn_layers'], use_cuda=self.opt['cuda'])
         rnn_inputs = nn.utils.rnn.pack_padded_sequence(rnn_inputs, seq_lens, batch_first=True)
         rnn_outputs, (ht, ct) = self.rnn(rnn_inputs, (h0, c0))
         rnn_outputs, _ = nn.utils.rnn.pad_packed_sequence(rnn_outputs, batch_first=True)
         return rnn_outputs
 
     def forward(self, adj, inputs):
-        words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
+        base_inputs = inputs['base']
+        words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = base_inputs # unpack
         word_embs = self.emb(words)
         embs = [word_embs]
         if self.opt['pos_dim'] > 0:
