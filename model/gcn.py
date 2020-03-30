@@ -10,23 +10,36 @@ import numpy as np
 
 from model.tree import Tree, head_to_tree, tree_to_adj
 from utils import constant, torch_utils
+from model.link_prediction_models import *
+
+def choose_fact_checker(params):
+    name = params['name'].lower()
+    if name == 'distmult':
+        fact_checker = DistMult(params)
+    elif name == 'conve':
+        fact_checker = ConvE(params)
+    elif name == 'complex':
+        fact_checker = Complex(params)
+    else:
+        raise ValueError('Only, {distmult, conve, and complex}  are supported')
+    return fact_checker
 
 class GCNClassifier(nn.Module):
     """ A wrapper classifier for GCNRelationModel. """
     def __init__(self, opt, emb_matrix=None):
         super().__init__()
         self.gcn_model = GCNRelationModel(opt, emb_matrix=emb_matrix)
-        in_dim = opt['hidden_dim']
-        self.classifier = nn.Linear(in_dim, opt['num_class'])
+        # in_dim = opt['hidden_dim']
+        # self.classifier = nn.Linear(in_dim, opt['num_class'])
         self.opt = opt
 
     def conv_l2(self):
         return self.gcn_model.gcn.conv_l2()
 
     def forward(self, inputs):
-        outputs, pooling_output = self.gcn_model(inputs)
-        logits = self.classifier(outputs)
-        return logits, pooling_output
+        logits, pooling_output, supplemental_losses = self.gcn_model(inputs)
+        # logits = self.classifier(outputs)
+        return logits, pooling_output, supplemental_losses
 
 class GCNRelationModel(nn.Module):
     def __init__(self, opt, emb_matrix=None):
@@ -39,11 +52,20 @@ class GCNRelationModel(nn.Module):
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
         embeddings = (self.emb, self.pos_emb, self.ner_emb)
-        self.init_embeddings()
-
+        in_dim = opt['hidden_dim']
+        self.classifier = nn.Linear(in_dim, opt['num_class'])
         # gcn layer
         self.gcn = GCN(opt, embeddings, opt['hidden_dim'], opt['num_layers'])
+        # KG Model
+        if opt['kg_loss'] is not None:
+            self.rel_emb = nn.Embedding(opt['kg_loss']['model']['num_relations'],
+                                        opt['kg_loss']['model']['embedding_dim'])
+            self.object_indexes = torch.from_numpy(np.array(opt['obj_idxs']))
+            if opt['cuda']:
+                self.object_indexes = self.object_indexes.cuda()
+            self.kg_model = choose_fact_checker(opt['kg_loss']['model'])
 
+        self.init_embeddings()
         # output mlp layers
         in_dim = opt['hidden_dim']*3
         layers = [nn.Linear(in_dim, opt['hidden_dim']), nn.ReLU()]
@@ -69,7 +91,9 @@ class GCNRelationModel(nn.Module):
             print("Finetune all embeddings.")
 
     def forward(self, inputs):
-        words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
+        base_inputs, supplemental_inputs = inputs['base'], inputs['supplemental']
+        words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = base_inputs # unpack
+
         l = (masks.data.cpu().numpy() == 0).astype(np.int64).sum(1)
         maxlen = max(l)
 
@@ -92,7 +116,29 @@ class GCNRelationModel(nn.Module):
         obj_out = pool(h, obj_mask, type=pool_type)
         outputs = torch.cat([h_out, subj_out, obj_out], dim=1)
         outputs = self.out_mlp(outputs)
-        return outputs, h_out
+
+        if self.opt['kg_loss'] is not None:
+            subjects, relations, labels = supplemental_inputs['knowledge_graph']
+            # object indices to compare against
+            e2s = self.emb(self.object_indexes)
+            # Obtain embeddings
+            subject_embs = self.emb(subjects)
+            relation_embs = self.rel_emb(relations)
+            # Forward pass through both relation and sentence KGLP
+            relation_kg_preds = self.kg_model.forward(subject_embs, relation_embs, e2s)
+            sentence_kg_preds = self.kg_model.forward(subject_embs, outputs, e2s)
+            # Compute each loss term
+            relation_kg_loss = self.kg_model.loss(relation_kg_preds, labels)
+            sentence_kg_preds = self.kg_model.loss(sentence_kg_preds, labels)
+            supplemental_losses = {'relation':relation_kg_loss, 'sentence': sentence_kg_preds}
+            # Remove gradient from flowing to the relation embeddings in the main loss calculation
+            logits = torch.mm(outputs, self.rel_emb.weight.transpose(1, 0).detach())
+            #logits += self.class_bias
+        else:
+            supplemental_losses = {}
+            logits = self.classifier(outputs)
+
+        return logits, h_out, supplemental_losses
 
 class GCN(nn.Module):
     """ A GCN/Contextualized GCN module operated on dependency graphs. """

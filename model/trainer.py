@@ -59,6 +59,19 @@ def unpack_batch(batch, cuda):
     lens = batch[1].eq(0).long().sum(1).squeeze()
     return inputs, labels, tokens, head, subj_pos, obj_pos, lens
 
+def maybe_place_batch_on_cuda(batch, cuda):
+    base_batch = batch['base'][:10]
+    labels = batch['base'][10]
+    # orig_idx = batch['base'][8]
+    if cuda:
+        base_batch = [component.cuda() for component in base_batch]
+        labels = labels.cuda()
+        for name, data in batch['supplemental'].items():
+            batch['supplemental'][name] = [component.cuda() for component in data]
+
+    batch['base'] = base_batch
+    return batch, labels#, orig_idx
+
 class GCNTrainer(Trainer):
     def __init__(self, opt, emb_matrix=None):
         self.opt = opt
@@ -72,32 +85,51 @@ class GCNTrainer(Trainer):
         self.optimizer = torch_utils.get_optimizer(opt['optim'], self.parameters, opt['lr'])
 
     def update(self, batch):
-        inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
-
+        losses = {}
+        # inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
+        inputs, labels = maybe_place_batch_on_cuda(batch, cuda=self.opt['cuda'])
         # step forward
         self.model.train()
         self.optimizer.zero_grad()
-        logits, pooling_output = self.model(inputs)
-        loss = self.criterion(logits, labels)
+        logits, pooling_output, supplemental_losses = self.model(inputs)
+        main_loss = self.criterion(logits, labels)
+        cumulative_loss = main_loss
+        losses['main'] = main_loss.data.item()
         # l2 decay on all conv layers
         if self.opt.get('conv_l2', 0) > 0:
-            loss += self.model.conv_l2() * self.opt['conv_l2']
+            conv_l2_loss = self.model.conv_l2() * self.opt['conv_l2']
+            cumulative_loss += conv_l2_loss
+            losses['conv_l2'] = conv_l2_loss.data.item()
         # l2 penalty on output representations
         if self.opt.get('pooling_l2', 0) > 0:
-            loss += self.opt['pooling_l2'] * (pooling_output ** 2).sum(1).mean()
-        loss_val = loss.item()
+            pooling_l2_loss = self.opt['pooling_l2'] * (pooling_output ** 2).sum(1).mean()
+            cumulative_loss += pooling_l2_loss
+            losses['pooling_l2'] = pooling_l2_loss.data.item()
+        if self.opt['kg_loss'] is not None:
+            relation_kg_loss = supplemental_losses['relation']
+            sentence_kg_loss = supplemental_losses['sentence']
+            cumulative_loss += (relation_kg_loss + sentence_kg_loss) * self.opt['kg_loss']['lambda']
+            # losses.update(supplemental_losses)
+            relation_kg_loss_value = relation_kg_loss.data.item()
+            sentence_kg_loss_value = sentence_kg_loss.data.item()
+            losses.update({'relation_kg': relation_kg_loss_value, 'sentence_kg': sentence_kg_loss_value})
+            # kg_loss = self.kg_criterion(batch_inputs=inputs, relations=sentence_encs)
+            # cumulative_loss += self.opt['kg_loss']['lambda'] * kg_loss.sum()
+            # losses['kg'] = kg_loss.data.item()
+        loss_val = cumulative_loss.item()
         # backward
-        loss.backward()
+        cumulative_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.opt['max_grad_norm'])
         self.optimizer.step()
         return loss_val
 
     def predict(self, batch, unsort=True):
-        inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
+        # inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
+        inputs, labels = maybe_place_batch_on_cuda(batch, cuda=self.opt['cuda'])
         orig_idx = batch[11]
         # forward
         self.model.eval()
-        logits, _ = self.model(inputs)
+        logits, _, _ = self.model(inputs)
         loss = self.criterion(logits, labels)
         probs = F.softmax(logits, 1).data.cpu().numpy().tolist()
         predictions = np.argmax(logits.data.cpu().numpy(), axis=1).tolist()
