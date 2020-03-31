@@ -7,6 +7,8 @@ Score the predictions with gold labels, using precision, recall and F1 metrics.
 import argparse
 import sys
 from collections import Counter
+from sklearn.metrics import roc_auc_score
+import numpy as np
 
 NO_RELATION = "no_relation"
 
@@ -109,3 +111,19 @@ if __name__ == "__main__":
     # Score the predictions
     score(key, prediction, verbose=True)
 
+def get_one_hot(targets, nb_classes):
+    res = np.eye(nb_classes)[np.array(targets).reshape(-1)]
+    return res.reshape(list(targets.shape)+[nb_classes])
+
+def compute_AUC(batched_dataset, model):
+    data_probs = np.empty((0, 42), dtype=np.float32)
+    data_labels = np.empty((0, 42), dtype=np.float32)
+    for batch in batched_dataset:
+        correct_relations = batch['base'][-2]
+        _, batch_probs, _ = model.predict(batch)
+        data_probs = np.concatenate((data_probs, batch_probs), axis=0)
+
+        one_hot_labels = get_one_hot(correct_relations, 42)
+        data_labels = np.concatenate((data_labels, one_hot_labels), axis=0)
+    auc = roc_auc_score(data_labels, data_probs)
+    print('AUC: {}'.format(auc))

@@ -188,8 +188,8 @@ test_metrics_at_best_dev = defaultdict(lambda: -np.inf)
 # start training
 for epoch in range(1, opt['num_epoch']+1):
     train_loss = 0
-    for i, batch in enumerate(train_batch):
-    # for i in range(0):
+    # for i, batch in enumerate(train_batch):
+    for i in range(0):
         start_time = time.time()
         global_step += 1
         losses = trainer.update(batch)
@@ -204,11 +204,14 @@ for epoch in range(1, opt['num_epoch']+1):
             print(print_info + loss_prints)
 
     print("Evaluating on train set...")
+    # comute auc
+    scorer.compute_AUC(train_batch, trainer)
+
     predictions = []
     train_eval_loss = 0
     for i, batch in enumerate(train_batch):
         # for i, _ in enumerate([]):
-        preds, _, loss = trainer.predict(batch)
+        preds, probs, loss = trainer.predict(batch)
         predictions += preds
         train_eval_loss += loss
     predictions = [id2label[p] for p in predictions]
@@ -220,12 +223,13 @@ for epoch in range(1, opt['num_epoch']+1):
                                                                                      train_loss,
                                                                                      train_eval_loss, train_f1))
     file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}".format(epoch, train_loss, train_eval_loss, train_f1))
+
     # eval on dev
     print("Evaluating on dev set...")
     predictions = []
     dev_loss = 0
     for i, batch in enumerate(dev_batch):
-        preds, _, loss = trainer.predict(batch)
+        preds, probs, loss = trainer.predict(batch)
         predictions += preds
         dev_loss += loss
     predictions = [id2label[p] for p in predictions]
@@ -239,6 +243,9 @@ for epoch in range(1, opt['num_epoch']+1):
         epoch, train_loss, dev_loss, dev_score, max([dev_score] + dev_score_history)))
     current_dev_metrics = {'f1': dev_f1, 'precision': dev_p, 'recall': dev_r}
 
+    # compute auc
+    scorer.compute_AUC(dev_batch, trainer)
+
     print("Evaluating on test set...")
     predictions = []
     test_loss = 0
@@ -251,6 +258,9 @@ for epoch in range(1, opt['num_epoch']+1):
     predictions = [id2label[p] for p in predictions]
     test_p, test_r, test_f1 = scorer.score(test_batch.gold(), predictions)
     test_metrics_at_current_dev = {'f1': test_f1, 'precision': test_p, 'recall': test_r}
+
+    # compute auc
+    scorer.compute_AUC(test_batch, trainer)
 
     if best_dev_metrics['f1'] < current_dev_metrics['f1']:
         best_dev_metrics = current_dev_metrics
