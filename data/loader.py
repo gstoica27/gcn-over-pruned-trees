@@ -13,12 +13,13 @@ class DataLoader(object):
     """
     Load data from json files, preprocess and prepare batches.
     """
-    def __init__(self, filename, batch_size, opt, vocab, evaluation=False):
+    def __init__(self, filename, batch_size, opt, vocab, evaluation=False, exclude_triples=set()):
         self.batch_size = batch_size
         self.opt = opt
         self.vocab = vocab
         self.eval = evaluation
         self.label2id = constant.LABEL_TO_ID
+        self.exclude_triples = exclude_triples
 
         with open(filename) as infile:
             data = json.load(infile)
@@ -42,7 +43,17 @@ class DataLoader(object):
     def preprocess(self, data, vocab, opt):
         """ Preprocess the data and convert to ids. """
         processed = []
-        for d in data:
+        self.triple_idxs = []
+        for idx, d in enumerate(data):
+            subject_type = d['subj_type']
+            relation = d['relation']
+            object_type = d['obj_type']
+            if (subject_type, relation, object_type) in self.exclude_triples and not self.eval:
+                self.triple_idxs.append(idx)
+                continue
+            elif (subject_type, relation, object_type) in self.exclude_triples and self.eval:
+                self.triple_idxs.append(idx)
+
             tokens = list(d['token'])
             if opt['lower']:
                 tokens = [t.lower() for t in tokens]
