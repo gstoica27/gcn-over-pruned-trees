@@ -97,8 +97,8 @@ emb_matrix = np.load(emb_file)
 assert emb_matrix.shape[0] == vocab.size
 assert emb_matrix.shape[1] == opt['emb_dim']
 
-EXCLUDED_TRIPLES= {}
-#EXCLUDED_TRIPLES = {('ORGANIZATION', 'org:member_of', 'LOCATION')}
+#EXCLUDED_TRIPLES= {}
+EXCLUDED_TRIPLES = {('ORGANIZATION', 'org:member_of', 'LOCATION')}
 
 # EXCLUDED_TRIPLES = {('PERSON', 'per:countries_of_residence', 'NATIONALITY'),
 #                     ('ORGANIZATION', 'org:country_of_headquarters', 'COUNTRY'),
