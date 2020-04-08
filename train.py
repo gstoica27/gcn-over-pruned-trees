@@ -98,13 +98,13 @@ assert emb_matrix.shape[0] == vocab.size
 assert emb_matrix.shape[1] == opt['emb_dim']
 
 #EXCLUDED_TRIPLES= {}
-EXCLUDED_TRIPLES = {('ORGANIZATION', 'org:member_of', 'LOCATION')}
+# EXCLUDED_TRIPLES = {('ORGANIZATION', 'org:member_of', 'LOCATION')}
 
-# EXCLUDED_TRIPLES = {('PERSON', 'per:countries_of_residence', 'NATIONALITY'),
-#                     ('ORGANIZATION', 'org:country_of_headquarters', 'COUNTRY'),
-#                     ('PERSON', 'per:alternate_names', 'PERSON'),
-#                     ('ORGANIZATION', 'org:parents', 'COUNTRY'),
-#                     ('ORGANIZATION', 'org:subsidiaries', 'LOCATION')}
+EXCLUDED_TRIPLES = {('PERSON', 'per:countries_of_residence', 'NATIONALITY'),
+                    ('ORGANIZATION', 'org:country_of_headquarters', 'COUNTRY'),
+                    ('PERSON', 'per:alternate_names', 'PERSON'),
+                    ('ORGANIZATION', 'org:parents', 'COUNTRY'),
+                    ('ORGANIZATION', 'org:subsidiaries', 'LOCATION')}
 
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
