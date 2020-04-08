@@ -177,7 +177,7 @@ for epoch in range(1, opt['num_epoch']+1):
     train_predictions = [id2label[p] for p in train_predictions]
     train_eval_loss = train_eval_loss / train_batch.num_examples * opt['batch_size']
 
-    train_p, train_r, train_f1 = scorer.score(dev_batch.gold(), train_predictions)
+    train_p, train_r, train_f1 = scorer.score(train_batch.gold(), train_predictions)
     print("epoch {}: train_loss = {:.6f}, train_eval_loss = {:.6f}, dev_f1 = {:.4f}".format(
         epoch, train_loss, train_eval_loss, train_f1))
     train_score = train_f1
