@@ -109,7 +109,7 @@ EXCLUDED_TRIPLES = {('PERSON', 'per:countries_of_residence', 'NATIONALITY'),
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
 train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt,
-                         vocab, evaluation=False, exclude_triples=EXCLUDED_TRIPLES)
+                         vocab, evaluation=False)
 dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt,
                        vocab, evaluation=True, exclude_triples=EXCLUDED_TRIPLES)
 test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt,
