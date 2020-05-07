@@ -38,9 +38,13 @@ class GCNRelationModel(nn.Module):
         self.emb = nn.Embedding(opt['vocab_size'], opt['emb_dim'], padding_idx=constant.PAD_ID)
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
-        deprel_emb_size = opt['rnn_hidden'] * opt['rnn_hidden'] * 4
+        self.deprel_side = (2 * opt['rnn_hidden'])
+        if opt['diagonal_deprel']:
+            deprel_emb_size = self.deprel_side
+        else:
+            deprel_emb_size = self.deprel_side ** 2
         self.deprel_weight = nn.Embedding(len(constant.DEPREL_TO_ID), deprel_emb_size, padding_idx=0)
-        embeddings = (self.emb, self.pos_emb, self.ner_emb)
+        embeddings = (self.emb, self.pos_emb, self.ner_emb, self.deprel_weight)
         self.init_embeddings()
 
         # gcn layer
@@ -87,11 +91,7 @@ class GCNRelationModel(nn.Module):
 
         adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'],
                                   subj_pos.data, obj_pos.data, deprel.data)
-        deprel_adj = self.deprel_weight(adj)                                # [B, T, T, H*H]
-        deprel_adj = deprel_adj.reshape(
-            (-1, maxlen, maxlen, self.opt['rnn_hidden']*2, self.opt['rnn_hidden']*2)    # [B, T, T, H, H]
-        )
-        h, pool_mask = self.gcn(deprel_adj=deprel_adj, inputs=inputs, adj=adj)
+        h, pool_mask = self.gcn(inputs=inputs, adj=adj)
         
         # pooling
         subj_mask = subj_pos.eq(0).unsqueeze(2)
@@ -118,7 +118,7 @@ class GCN(nn.Module):
         self.mem_dim = mem_dim
         self.in_dim = opt['emb_dim'] + opt['pos_dim'] + opt['ner_dim']
 
-        self.emb, self.pos_emb, self.ner_emb = embeddings
+        self.emb, self.pos_emb, self.ner_emb, self.deprel_weight = embeddings
 
         # rnn layer
         if self.opt.get('rnn', False):
@@ -156,7 +156,7 @@ class GCN(nn.Module):
         rnn_outputs, _ = nn.utils.rnn.pad_packed_sequence(rnn_outputs, batch_first=True)
         return rnn_outputs
 
-    def forward(self, adj, inputs, deprel_adj):
+    def forward(self, adj, inputs):
         words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
         word_embs = self.emb(words)
         embs = [word_embs]
@@ -172,21 +172,49 @@ class GCN(nn.Module):
             gcn_inputs = self.rnn_drop(self.encode_with_rnn(embs, masks, words.size()[0]))
         else:
             gcn_inputs = embs
-        
+
+        _, maxlen, encoding_dim = gcn_inputs.shape
+        deprel_adj = self.deprel_weight(adj)  # [B, T, T, H*H]
+        if self.opt['diagonal_deprel']:
+            deprel_adj = deprel_adj.reshape((-1, maxlen, maxlen, encoding_dim))
+        else:
+            deprel_adj = deprel_adj.reshape(
+                (-1, maxlen, maxlen, encoding_dim, encoding_dim)  # [B, T, T, H, H]
+            )
+
         # gcn layer
         adj_matrix =  torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj))
         num_children = adj_matrix.sum(2).unsqueeze((2)) + 1
         mask = (adj_matrix.sum(2) + adj_matrix.sum(1)).eq(0).unsqueeze(2)
         for l in range(self.layers):
             layer_transform = self.W[l]
-            layer_inputs = gcn_inputs.unsqueeze(2)                                              # [B,T,1,H]
-            layer_inputs = layer_inputs.repeat(1, 1, gcn_inputs.shape[1], 1)                    # [B,T,T,H]
-            layer_inputs = layer_inputs.unsqueeze(dim=4)                                        # [B,T,T,H,1]
-            # [B,T,T,H,H] x [B,T,T,H,1] -> [B,T,T,H,1]
-            deprel_transformed = torch.einsum('abcde,abcef->abcdf', deprel_adj, layer_inputs)
-            deprel_transformed = deprel_transformed.sum(2)                                      # [B,T,T,H,1] -> [B,T,H,1]
-            deprel_layer = deprel_transformed.squeeze(-1)                                       # [B,T,H,1] -> [B,T,H]
-            AxW = deprel_layer + layer_transform(gcn_inputs)                                    # [B,T,H] + [B,T,H]
+            # [B,1,T,H]
+            # layer_inputs = gcn_inputs.unsqueeze(1)
+            if self.opt['diagonal_deprel']:
+                # [B,T,T,H] x [B,1,T,H]
+                layer_inputs = gcn_inputs.view((-1, 1,maxlen, encoding_dim))
+                deprel_transformed = layer_inputs * deprel_adj
+                # [B,T,T,H] -> [B,T,H]
+                deprel_layer = deprel_transformed.sum(2)
+            else:
+                # [B,1,T,H] -> [B,1,T,1,H]
+                layer_inputs = gcn_inputs.view((-1, 1, maxlen, 1, encoding_dim))
+                # [B,T,T,H,H] x [B,1,T,1,H]
+                deprel_transformed = deprel_adj * layer_inputs
+                # [B,T,T,H,H] -> [B,T,T,H] -> [B,T,H]
+                deprel_transformed = deprel_transformed.sum(dim=-1).sum(dim=2)
+                deprel_layer = deprel_transformed
+                # layer_inputs = layer_inputs.repeat(1, gcn_inputs.shape[1], 1, 1)
+                # [B,T,T,H,1]
+                # layer_inputs = layer_inputs.unsqueeze(dim=4)
+                # [B,T,T,H,H] x [B,T,T,H,1] -> [B,T,T,H,1]
+                # deprel_transformed = torch.einsum('abcde,abcef->abcdf', deprel_adj, layer_inputs)
+                # [B,T,T,H,1] -> [B,T,H,1]
+                # deprel_transformed = deprel_transformed.sum(2)
+                # [B,T,H,1] -> [B,T,H]
+                # deprel_layer = deprel_transformed.squeeze(-1)
+            # [B,T,H] + [B,T,H]
+            AxW = deprel_layer + layer_transform(gcn_inputs)
             AxW /= num_children.type(torch.float32)
             gAxW = F.relu(AxW)
             gcn_inputs = self.gcn_drop(gAxW) if l < self.layers -1 else gAxW
