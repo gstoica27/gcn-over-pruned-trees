@@ -145,7 +145,11 @@ class GCN(nn.Module):
         return sum([x.pow(2).sum() for x in conv_weights])
 
     def encode_with_rnn(self, rnn_inputs, masks, batch_size):
-        seq_lens = list(masks.data.eq(constant.PAD_ID).long().sum(1).squeeze())
+        seq_lens = masks.data.eq(constant.PAD_ID).long().sum(1).squeeze()
+        if len(seq_lens.shape) == 0:
+            seq_lens = [seq_lens]
+        else:
+            seq_lens = list(seq_lens)
         h0, c0 = rnn_zero_state(batch_size, self.opt['rnn_hidden'], self.opt['rnn_layers'], use_cuda=self.opt['cuda'])
         rnn_inputs = nn.utils.rnn.pack_padded_sequence(rnn_inputs, seq_lens, batch_first=True)
         rnn_outputs, (ht, ct) = self.rnn(rnn_inputs, (h0, c0))

@@ -165,6 +165,7 @@ for epoch in range(1, opt['num_epoch']+1):
     trainer.model.train()
     trainer.optimizer.zero_grad()
     for i, batch in enumerate(train_batch):
+    # for i in range(0):
         start_time = time.time()
         global_step += 1
         loss = trainer.update(batch, step=i+1, mini_batch_length=int(50/opt['batch_size']))
