@@ -71,12 +71,11 @@ class GCNTrainer(Trainer):
             self.criterion.cuda()
         self.optimizer = torch_utils.get_optimizer(opt['optim'], self.parameters, opt['lr'])
 
-    def update(self, batch):
+    def update(self, batch, step, mini_batch_length):
         inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
 
         # step forward
-        self.model.train()
-        self.optimizer.zero_grad()
+        # self.model.train()
         logits, pooling_output = self.model(inputs)
         loss = self.criterion(logits, labels)
         # l2 decay on all conv layers
@@ -85,11 +84,16 @@ class GCNTrainer(Trainer):
         # l2 penalty on output representations
         if self.opt.get('pooling_l2', 0) > 0:
             loss += self.opt['pooling_l2'] * (pooling_output ** 2).sum(1).mean()
+        # Divide for batch simulation
+        loss /= mini_batch_length
+
         loss_val = loss.item()
         # backward
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.opt['max_grad_norm'])
-        self.optimizer.step()
+        if step % mini_batch_length == 0:
+            self.optimizer.step()
+            self.optimizer.zero_grad()
         return loss_val
 
     def predict(self, batch, unsort=True):

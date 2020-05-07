@@ -162,16 +162,19 @@ test_metrics_at_best_dev = defaultdict(lambda: -np.inf)
 # start training
 for epoch in range(1, opt['num_epoch']+1):
     train_loss = 0
+    trainer.model.train()
+    trainer.optimizer.zero_grad()
     for i, batch in enumerate(train_batch):
         start_time = time.time()
         global_step += 1
-        loss = trainer.update(batch)
+        loss = trainer.update(batch, step=i+1, mini_batch_length=int(50/opt['batch_size']))
         train_loss += loss
         if global_step % opt['log_step'] == 0:
             duration = time.time() - start_time
             print(format_str.format(datetime.now(), global_step, max_steps, epoch,\
                     opt['num_epoch'], loss, duration, current_lr))
 
+    trainer.optimizer.zero_grad()
     train_loss = train_loss / train_batch.num_examples * opt['batch_size']  # avg loss per batch
     # eval on train
     print("Evaluating on train set...")
