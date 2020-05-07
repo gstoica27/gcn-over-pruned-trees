@@ -182,8 +182,8 @@ class GCN(nn.Module):
             deprel_transformed = torch.einsum('abcde,abcef->abcdf', deprel_adj, layer_inputs)
             deprel_transformed = deprel_transformed.sum(2)                                      # [B,T,T,H,1] -> [B,T,H,1]
             deprel_layer = deprel_transformed.squeeze(-1)                                       # [B,T,H,1] -> [B,T,H]
-            AxW = deprel_layer + layer_transform(gcn_inputs)                    # [B,T,H] + [B,T,H]
-            AxW /= num_children
+            AxW = deprel_layer + layer_transform(gcn_inputs)                                    # [B,T,H] + [B,T,H]
+            AxW /= num_children.type(torch.float32)
             gAxW = F.relu(AxW)
             gcn_inputs = self.gcn_drop(gAxW) if l < self.layers -1 else gAxW
 
