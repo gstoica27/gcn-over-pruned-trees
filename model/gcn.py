@@ -89,7 +89,7 @@ class GCNRelationModel(nn.Module):
                                   subj_pos.data, obj_pos.data, deprel.data)
         deprel_adj = self.deprel_weight(adj)                                # [B, T, T, H*H]
         deprel_adj = deprel_adj.reshape(
-            (-1, maxlen, maxlen, self.opt['hidden_dim'], self.opt['hidden_dim'])    # [B, T, T, H, H]
+            (-1, maxlen, maxlen, self.opt['rnn_hidden']*2, self.opt['rnn_hidden']*2)    # [B, T, T, H, H]
         )
         h, pool_mask = self.gcn(deprel_adj=deprel_adj, inputs=inputs, adj=adj)
         
