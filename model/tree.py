@@ -56,7 +56,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
     root = None
 
     if prune < 0:
-        print('Prune < 0')
+        # print('Prune < 0')
         nodes = [Tree() for _ in head]
 
         for i in range(len(nodes)):
@@ -68,7 +68,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
             else:
                 nodes[h-1].add_child(nodes[i])
     else:
-        print('Prune > 0')
+        # print('Prune > 0')
         # find dependency path
         subj_pos = [i for i in range(len_) if subj_pos[i] == 0]
         obj_pos = [i for i in range(len_) if obj_pos[i] == 0]
