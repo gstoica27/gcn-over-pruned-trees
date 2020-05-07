@@ -114,9 +114,11 @@ assert emb_matrix.shape[1] == opt['emb_dim']
 
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + '/train_correct.json', opt['batch_size'], opt,
+train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt,
                          vocab, evaluation=False)
-test_batch = DataLoader(opt['data_dir'] + '/test_correct.json', opt['batch_size'], opt,
+dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'],
+                       opt, vocab, evaluation=True)
+test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt,
                         vocab, evaluation=True)
 
 model_id = opt['id'] if len(opt['id']) > 1 else '0' + opt['id']
@@ -139,22 +141,23 @@ if not opt['load']:
     trainer = GCNTrainer(opt, emb_matrix=emb_matrix)
 else:
     # load pretrained model
-    model_file = opt['model_file'] 
+    model_file = opt['model_file']
     print("Loading model from {}".format(model_file))
     model_opt = torch_utils.load_config(model_file)
     model_opt['optim'] = opt['optim']
     trainer = GCNTrainer(model_opt)
-    trainer.load(model_file)   
+    trainer.load(model_file)
 
 id2label = dict([(v,k) for k,v in label2id.items()])
-test_score_history = []
+dev_score_history = []
 current_lr = opt['lr']
 
 global_step = 0
 global_start_time = time.time()
 format_str = '{}: step {}/{} (epoch {}/{}), loss = {:.6f} ({:.3f} sec/batch), lr: {:.6f}'
 max_steps = len(train_batch) * opt['num_epoch']
-best_test_metrics = defaultdict(lambda: -np.inf)
+best_dev_metrics = defaultdict(lambda: -np.inf)
+test_metrics_at_best_dev = defaultdict(lambda: -np.inf)
 
 # start training
 for epoch in range(1, opt['num_epoch']+1):
@@ -169,6 +172,7 @@ for epoch in range(1, opt['num_epoch']+1):
             print(format_str.format(datetime.now(), global_step, max_steps, epoch,\
                     opt['num_epoch'], loss, duration, current_lr))
 
+    train_loss = train_loss / train_batch.num_examples * opt['batch_size']  # avg loss per batch
     # eval on train
     print("Evaluating on train set...")
     train_predictions = []
@@ -186,34 +190,60 @@ for epoch in range(1, opt['num_epoch']+1):
     train_score = train_f1
     file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}".format(epoch, train_loss, train_eval_loss, train_f1))
 
+    # eval on dev
+    print("Evaluating on dev set...")
+    dev_predictions = []
+    dev_eval_loss = 0
+    for i, batch in enumerate(dev_batch):
+        preds, _, loss = trainer.predict(batch)
+        dev_predictions += preds
+        dev_eval_loss += loss
+    dev_predictions = [id2label[p] for p in dev_predictions]
+    dev_eval_loss = dev_eval_loss / dev_batch.num_examples * opt['batch_size']
+
+    dev_p, dev_r, dev_f1 = scorer.score(dev_batch.gold(), dev_predictions)
+    print("epoch {}: train_loss = {:.6f}, dev_eval_loss = {:.6f}, dev_f1 = {:.4f}".format(
+        epoch, train_loss, dev_eval_loss, dev_f1))
+    train_score = train_f1
+    file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}".format(epoch, train_loss, dev_eval_loss, dev_f1))
+    current_dev_metrics = {'f1': dev_f1, 'precision': dev_p, 'recall': dev_r}
+
     # eval on test
     test_predictions = []
     for i, batch in enumerate(test_batch):
         preds, _, loss = trainer.predict(batch)
         test_predictions += preds
     test_predictions = [id2label[p] for p in test_predictions]
-    train_loss = train_loss / train_batch.num_examples * opt['batch_size']  # avg loss per batch
-    test_p, test_r, test_f1 = scorer.score(test_batch.gold(), test_predictions)
-    test_metrics = {'f1': test_f1, 'precision': test_p, 'recall': test_r}
 
-    if best_test_metrics['f1'] <= test_metrics['f1']:
-        best_test_metrics = test_metrics
+    test_p, test_r, test_f1 = scorer.score(test_batch.gold(), test_predictions)
+    test_metrics_at_current_dev = {'f1': test_f1, 'precision': test_p, 'recall': test_r}
+
+    if best_dev_metrics['f1'] < current_dev_metrics['f1']:
+        best_dev_metrics = current_dev_metrics
+        test_metrics_at_best_dev = test_metrics_at_current_dev
         trainer.save(os.path.join(model_save_dir, 'best_model.pt'), epoch)
         print("New best model saved")
         file_logger.log("new best model saved at epoch {}: {:.2f}\t{:.2f}\t{:.2f}" \
                         .format(epoch, test_p * 100, test_r * 100, test_f1 * 100))
 
         # Compute Confusion Matrices over triples excluded in Training
-        test_triple_preds = np.array(test_predictions)
-        test_triple_gold = np.array(test_batch.gold())
-        test_confusion_matrix = scorer.compute_confusion_matrices(ground_truth=test_triple_gold,
-                                                                  predictions=test_triple_preds)
+        test_preds = np.array(test_predictions)
+        test_gold = np.array(test_batch.gold())
+        dev_preds = np.array(dev_predictions)
+        dev_gold = np.array(dev_batch.gold())
+        test_confusion_matrix = scorer.compute_confusion_matrices(ground_truth=test_gold,
+                                                                  predictions=test_preds)
+        dev_confusion_matrix = scorer.compute_confusion_matrices(ground_truth=dev_gold,
+                                                                 predictions=dev_preds)
         print("Saving Excluded Triple Confusion Matrices...")
         with open(test_confusion_save_file, 'wb') as handle:
             pickle.dump(test_confusion_matrix, handle)
 
+    print("Best Dev Metrics | F1: {} | Precision: {} | Recall: {}".format(
+        best_dev_metrics['f1'], best_dev_metrics['precision'], best_dev_metrics['recall']
+    ))
     print("Test Metrics at Best Dev | F1: {} | Precision: {} | Recall: {}".format(
-        best_test_metrics['f1'], best_test_metrics['precision'], best_test_metrics['recall']
+        test_metrics_at_best_dev['f1'], test_metrics_at_best_dev['precision'], test_metrics_at_best_dev['recall']
     ))
 
     # save
@@ -229,12 +259,12 @@ for epoch in range(1, opt['num_epoch']+1):
     #     os.remove(model_file)
 
     # lr schedule
-    if len(test_score_history) > opt['decay_epoch'] and test_f1 <= test_score_history[-1] and \
+    if len(dev_score_history) > opt['decay_epoch'] and test_f1 <= dev_score_history[-1] and \
             opt['optim'] in ['sgd', 'adagrad', 'adadelta']:
         current_lr *= opt['lr_decay']
         trainer.update_lr(current_lr)
 
-    test_score_history += [test_f1]
+    dev_score_history += [dev_f1]
     print("")
 
 print("Training ended with {} epochs.".format(epoch))
