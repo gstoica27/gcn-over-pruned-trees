@@ -47,7 +47,7 @@ class Tree(object):
             for x in c:
                 yield x
 
-def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos):
+def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
     """
     Convert a sequence of head indexes into a tree object.
     """
@@ -141,6 +141,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos):
             h = head[i]
             nodes[i].idx = i
             nodes[i].dist = dist[i]
+            nodes[i].deprel = deprel[i]  # for dependency relation pass in adjacency matrix
             if h > 0 and i != highest_node:
                 assert nodes[h-1] is not None
                 nodes[h-1].add_child(nodes[i])
@@ -164,15 +165,21 @@ def tree_to_adj(sent_len, tree, directed=True, self_loop=False):
         idx += [t.idx]
 
         for c in t.children:
-            ret[t.idx, c.idx] = 1
+            # ret[t.idx, c.idx] = 1
+            ret[t.idx, c.idx] = c.deprel # We use the child's dependency relation id
+                                         # because the adjacency matrix is treated as
+                                         # an embedding lookup to the Deprel Weight
+                                         # embedding weights downstream in the network
         queue += t.children
 
     if not directed:
         ret = ret + ret.T
 
     if self_loop:
-        for i in idx:
-            ret[i, i] = 1
+        for t in tree:
+            ret[t.idx, t.idx] = t.deprel
+        # for i in idx:
+        #     ret[i, i] = 1
 
     return ret
 

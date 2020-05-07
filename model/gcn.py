@@ -38,6 +38,8 @@ class GCNRelationModel(nn.Module):
         self.emb = nn.Embedding(opt['vocab_size'], opt['emb_dim'], padding_idx=constant.PAD_ID)
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
+        deprel_emb_size = opt['rnn_hidden'] * opt['rnn_hidden'] * 4
+        self.deprel_weight = nn.Embedding(len(constant.DEPREL_TO_ID), deprel_emb_size, padding_idx=0)
         embeddings = (self.emb, self.pos_emb, self.ner_emb)
         self.init_embeddings()
 
@@ -73,19 +75,31 @@ class GCNRelationModel(nn.Module):
         l = (masks.data.cpu().numpy() == 0).astype(np.int64).sum(1)
         maxlen = max(l)
 
-        def inputs_to_tree_reps(head, words, l, prune, subj_pos, obj_pos):
-            head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
-            trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i]) for i in range(len(l))]
-            adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=False).reshape(1, maxlen, maxlen) for tree in trees]
-            adj = np.concatenate(adj, axis=0)
+        def inputs_to_tree_reps(head, words, l, prune, subj_pos, obj_pos, deprel):
+            head, words, subj_pos, obj_pos, deprel = list(map(lambda x: x.cpu().numpy(), [head, words, subj_pos, obj_pos, deprel]))
+            # head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
+            trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i], deprel[i]) for i in range(len(l))]
+            adj = [tree_to_adj(maxlen, tree, directed=True, self_loop=False).reshape(1, maxlen, maxlen) for tree in trees]
+            adj = np.concatenate(adj, axis=0).astype(np.int64)
             adj = torch.from_numpy(adj)
-            return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
+            return adj.cuda() if self.opt['cuda'] else adj
+            # return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
 
-        adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data)
-        h, pool_mask = self.gcn(adj, inputs)
+        adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'],
+                                  subj_pos.data, obj_pos.data, deprel.data)
+        deprel_adj = self.deprel_weight(adj)                                # [B, T, T, H*H]
+        deprel_adj = deprel_adj.reshape(
+            (-1, maxlen, maxlen, self.opt['hidden_dim'], self.opt['hidden_dim'])    # [B, T, T, H, H]
+        )
+        h, pool_mask = self.gcn(deprel_adj=deprel_adj, inputs=inputs, adj=adj)
         
         # pooling
-        subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
+        subj_mask = subj_pos.eq(0).unsqueeze(2)
+        obj_mask = obj_pos.eq(0).unsqueeze(2)
+        pool_mask = torch.logical_xor(pool_mask.eq(0), (subj_mask + obj_mask))
+        subj_mask, obj_mask, pool_mask = subj_mask.eq(0), obj_mask.eq(0), pool_mask.eq(0)
+
+        # subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
         pool_type = self.opt['pooling']
         h_out = pool(h, pool_mask, type=pool_type)
         subj_out = pool(h, subj_mask, type=pool_type)
@@ -132,13 +146,13 @@ class GCN(nn.Module):
 
     def encode_with_rnn(self, rnn_inputs, masks, batch_size):
         seq_lens = list(masks.data.eq(constant.PAD_ID).long().sum(1).squeeze())
-        h0, c0 = rnn_zero_state(batch_size, self.opt['rnn_hidden'], self.opt['rnn_layers'])
+        h0, c0 = rnn_zero_state(batch_size, self.opt['rnn_hidden'], self.opt['rnn_layers'], use_cuda=self.opt['cuda'])
         rnn_inputs = nn.utils.rnn.pack_padded_sequence(rnn_inputs, seq_lens, batch_first=True)
         rnn_outputs, (ht, ct) = self.rnn(rnn_inputs, (h0, c0))
         rnn_outputs, _ = nn.utils.rnn.pad_packed_sequence(rnn_outputs, batch_first=True)
         return rnn_outputs
 
-    def forward(self, adj, inputs):
+    def forward(self, adj, inputs, deprel_adj):
         words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
         word_embs = self.emb(words)
         embs = [word_embs]
@@ -156,21 +170,38 @@ class GCN(nn.Module):
             gcn_inputs = embs
         
         # gcn layer
-        denom = adj.sum(2).unsqueeze(2) + 1
-        mask = (adj.sum(2) + adj.sum(1)).eq(0).unsqueeze(2)
-        # zero out adj for ablation
-        if self.opt.get('no_adj', False):
-            adj = torch.zeros_like(adj)
-
+        adj_matrix =  torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj))
+        num_children = adj_matrix.sum(2).unsqueeze((2)) + 1
+        mask = (adj_matrix.sum(2) + adj_matrix.sum(1)).eq(0).unsqueeze(2)
         for l in range(self.layers):
-            Ax = adj.bmm(gcn_inputs)
-            AxW = self.W[l](Ax)
-            AxW = AxW + self.W[l](gcn_inputs) # self loop
-            AxW = AxW / denom
-
+            layer_transform = self.W[l]
+            layer_inputs = gcn_inputs.unsqueeze(2)                                              # [B,T,1,H]
+            layer_inputs = layer_inputs.repeat(1, 1, gcn_inputs.shape[1], 1)                    # [B,T,T,H]
+            layer_inputs = layer_inputs.unsqueeze(dim=4)                                        # [B,T,T,H,1]
+            # [B,T,T,H,H] x [B,T,T,H,1] -> [B,T,T,H,1]
+            deprel_transformed = torch.einsum('abcde,abcef->abcdf', deprel_adj, layer_inputs)
+            deprel_transformed = deprel_transformed.sum(2)                                      # [B,T,T,H,1] -> [B,T,H,1]
+            deprel_layer = deprel_transformed.squeeze(-1)                                       # [B,T,H,1] -> [B,T,H]
+            AxW = deprel_layer + layer_transform(gcn_inputs)                    # [B,T,H] + [B,T,H]
+            AxW /= num_children
             gAxW = F.relu(AxW)
-            gcn_inputs = self.gcn_drop(gAxW) if l < self.layers - 1 else gAxW
+            gcn_inputs = self.gcn_drop(gAxW) if l < self.layers -1 else gAxW
 
+        # denom = adj.sum(2).unsqueeze(2) + 1
+        # mask = (adj.sum(2) + adj.sum(1)).eq(0).unsqueeze(2)
+        # # zero out adj for ablation
+        # if self.opt.get('no_adj', False):
+        #     adj = torch.zeros_like(adj)
+        #
+        # for l in range(self.layers):
+        #     Ax = adj.bmm(gcn_inputs)
+        #     AxW = self.W[l](Ax)
+        #     AxW = AxW + self.W[l](gcn_inputs) # self loop
+        #     AxW = AxW / denom
+        #
+        #     gAxW = F.relu(AxW)
+        #     gcn_inputs = self.gcn_drop(gAxW) if l < self.layers - 1 else gAxW
+        #
         return gcn_inputs, mask
 
 def pool(h, mask, type='max'):

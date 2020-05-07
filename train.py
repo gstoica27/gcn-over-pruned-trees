@@ -22,10 +22,25 @@ from model.trainer import GCNTrainer
 from utils import torch_utils, scorer, constant, helper
 from utils.vocab import Vocab
 
+cwd = os.getcwd()
+on_server = 'Desktop' not in cwd
+# Local paths
+local_data_dir = '/Volumes/External HDD/dataset/tacred/data/json'
+local_vocab_dir = '/Volumes/External HDD/dataset/tacred/data/vocab'
+local_model_save_dir = '/Volumes/External HDD/dataset/tacred/saved_models'
+# Server paths
+server_data_dir = '/usr0/home/gis/data/tacred/data/json'
+server_vocab_dir = '/usr0/home/gis/data/tacred/data/vocab'
+server_model_save_dir = '/usr0/home/gis/research/tacred-exploration/saved_models'
+# paths
+data_dir = server_data_dir if on_server else local_data_dir
+vocab_dir = server_vocab_dir if on_server else local_vocab_dir
+model_save_dir = server_model_save_dir if on_server else server_model_save_dir
+
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', type=str, default='/usr0/home/gis/data/tacred/data/json')
-parser.add_argument('--vocab_dir', type=str, default='/usr0/home/gis/data/tacred/data/vocab')
-parser.add_argument('--model_save_dir', type=str, default='/usr0/home/gis/research/tacred-exploration/saved_models')
+parser.add_argument('--data_dir', type=str, default=data_dir)
+parser.add_argument('--vocab_dir', type=str, default=vocab_dir)
+parser.add_argument('--model_save_dir', type=str, default=model_save_dir)
 parser.add_argument('--emb_dim', type=int, default=300, help='Word embedding dimension.')
 parser.add_argument('--ner_dim', type=int, default=30, help='NER embedding dimension.')
 parser.add_argument('--pos_dim', type=int, default=30, help='POS embedding dimension.')
@@ -47,7 +62,7 @@ parser.add_argument('--mlp_layers', type=int, default=2, help='Number of output 
 parser.add_argument('--no_adj', dest='no_adj', action='store_true', help="Zero out adjacency matrix for ablation.")
 
 parser.add_argument('--no-rnn', dest='rnn', action='store_false', help='Do not use RNN layer.')
-parser.add_argument('--rnn_hidden', type=int, default=200, help='RNN hidden state size.')
+parser.add_argument('--rnn_hidden', type=int, default=100, help='RNN hidden state size.')
 parser.add_argument('--rnn_layers', type=int, default=1, help='Number of RNN layers.')
 parser.add_argument('--rnn_dropout', type=float, default=0.5, help='RNN dropout rate.')
 
@@ -56,7 +71,7 @@ parser.add_argument('--lr_decay', type=float, default=0.9, help='Learning rate d
 parser.add_argument('--decay_epoch', type=int, default=5, help='Decay learning rate after this epoch.')
 parser.add_argument('--optim', choices=['sgd', 'adagrad', 'adam', 'adamax'], default='sgd', help='Optimizer: sgd, adagrad, adam or adamax.')
 parser.add_argument('--num_epoch', type=int, default=100, help='Number of total training epochs.')
-parser.add_argument('--batch_size', type=int, default=50, help='Training batch size.')
+parser.add_argument('--batch_size', type=int, default=10, help='Training batch size.')
 parser.add_argument('--max_grad_norm', type=float, default=5.0, help='Gradient clipping.')
 parser.add_argument('--log_step', type=int, default=20, help='Print log every k steps.')
 parser.add_argument('--log', type=str, default='logs.txt', help='Write training log to file.')
