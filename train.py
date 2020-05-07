@@ -35,7 +35,7 @@ server_model_save_dir = '/usr0/home/gis/research/tacred-exploration/saved_models
 # paths
 data_dir = server_data_dir if on_server else local_data_dir
 vocab_dir = server_vocab_dir if on_server else local_vocab_dir
-model_save_dir = server_model_save_dir if on_server else server_model_save_dir
+model_save_dir = server_model_save_dir if on_server else local_model_save_dir
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default=data_dir)
