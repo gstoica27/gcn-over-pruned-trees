@@ -21,10 +21,29 @@ from data.loader import DataLoader
 from model.trainer import GCNTrainer
 from utils import torch_utils, scorer, constant, helper
 from utils.vocab import Vocab
+cwd = os.getcwd()
+on_server = 'Desktop' not in cwd
+# Local paths
+local_data_dir = '/Volumes/External HDD/dataset/tacred/data/json'
+local_vocab_dir = '/Volumes/External HDD/dataset/tacred/data/vocab'
+local_model_save_dir = '/Volumes/External HDD/dataset/tacred/saved_models'
+local_test_save_dir = os.path.join(cwd, 'tacred_test_performances')
+os.makedirs(local_test_save_dir, exist_ok=True)
+# Server paths
+server_data_dir = '/usr0/home/gis/data/tacred/data/json'
+server_vocab_dir = '/usr0/home/gis/data/tacred/data/vocab'
+server_model_save_dir = '/usr0/home/gis/research/tacred-exploration/saved_models'
+server_test_save_dir = '/usr0/home/gis/research/tacred-exploration/tacred_test_performances'
+# paths
+data_dir = server_data_dir if on_server else local_data_dir
+vocab_dir = server_vocab_dir if on_server else local_vocab_dir
+model_save_dir = server_model_save_dir if on_server else local_model_save_dir
+test_save_dir = server_test_save_dir if on_server else local_test_save_dir
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', type=str, default='/usr0/home/gis/data/tacred/data/json')
-parser.add_argument('--vocab_dir', type=str, default='/usr0/home/gis/data/tacred/data/vocab')
+parser.add_argument('--data_dir', type=str, default=data_dir)
+parser.add_argument('--vocab_dir', type=str, default=vocab_dir)
+parser.add_argument('--model_save_dir', type=str, default=model_save_dir)
 parser.add_argument('--emb_dim', type=int, default=300, help='Word embedding dimension.')
 parser.add_argument('--ner_dim', type=int, default=30, help='NER embedding dimension.')
 parser.add_argument('--pos_dim', type=int, default=30, help='POS embedding dimension.')
@@ -36,7 +55,7 @@ parser.add_argument('--word_dropout', type=float, default=0.04, help='The rate a
 parser.add_argument('--topn', type=int, default=1e10, help='Only finetune top N word embeddings.')
 parser.add_argument('--lower', dest='lower', action='store_true', help='Lowercase all words.')
 parser.add_argument('--no-lower', dest='lower', action='store_false')
-parser.add_argument('--test_save_dir', default='/usr0/home/gis/research/tacred-exploration/tacred_test_performances', type=str)
+parser.add_argument('--test_save_dir', default=test_save_dir, type=str)
 parser.set_defaults(lower=False)
 
 parser.add_argument('--prune_k', default=-1, type=int, help='Prune the dependency tree to <= K distance off the dependency path; set to -1 for no pruning.')
@@ -61,7 +80,6 @@ parser.add_argument('--max_grad_norm', type=float, default=5.0, help='Gradient c
 parser.add_argument('--log_step', type=int, default=20, help='Print log every k steps.')
 parser.add_argument('--log', type=str, default='logs.txt', help='Write training log to file.')
 parser.add_argument('--save_epoch', type=int, default=100, help='Save model checkpoints every k epochs.')
-parser.add_argument('--save_dir', type=str, default='/usr0/home/gis/research/tacred-exploration/saved_models', help='Root dir for saving models.')
 parser.add_argument('--id', type=str, default='00', help='Model ID under which to save models.')
 parser.add_argument('--info', type=str, default='', help='Optional info for the experiment.')
 parser.add_argument('--test_confusion_save_file', default='')
@@ -104,7 +122,7 @@ dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt, vo
 test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt, vocab, evaluation=True)
 
 model_id = opt['id'] if len(opt['id']) > 1 else '0' + opt['id']
-model_save_dir = opt['save_dir'] + '/' + model_id
+model_save_dir = opt['model_save_dir'] + '/' + model_id
 opt['model_save_dir'] = model_save_dir
 helper.ensure_dir(model_save_dir, verbose=True)
 
@@ -148,10 +166,14 @@ test_metrics_at_best_dev = defaultdict(lambda: -np.inf)
 # start training
 for epoch in range(1, opt['num_epoch']+1):
     train_loss = 0
+    # Training in-case of mini-batches
+    trainer.model.train()
+    trainer.optimizer.zero_grad()
+
     for i, batch in enumerate(train_batch):
         start_time = time.time()
         global_step += 1
-        loss = trainer.update(batch)
+        loss = trainer.update(batch, step_num=i+1, update_gap=int(50/opt['batch_size']))
         train_loss += loss
         if global_step % opt['log_step'] == 0:
             duration = time.time() - start_time
