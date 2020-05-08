@@ -184,7 +184,7 @@ class GCN(nn.Module):
                 )
 
         # gcn layer
-        adj_matrix =  torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj))
+        adj_matrix =  torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj)).type(torch.float32)
         num_children = adj_matrix.sum(2).unsqueeze((2)) + 1
         mask = (adj_matrix.sum(2) + adj_matrix.sum(1)).eq(0).unsqueeze(2)
         for l in range(self.layers):
