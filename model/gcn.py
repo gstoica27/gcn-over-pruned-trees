@@ -87,11 +87,11 @@ class GCNRelationModel(nn.Module):
         h, pool_mask = self.gcn(adj, inputs)
         
         # pooling
-        # subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
-        subj_mask = subj_pos.eq(0).unsqueeze(2)
-        obj_mask = obj_pos.eq(0).unsqueeze(2)
-        pool_mask = torch.logical_xor(pool_mask.eq(0), (subj_mask + obj_mask))
-        subj_mask, obj_mask, pool_mask = subj_mask.eq(0), obj_mask.eq(0), pool_mask.eq(0)
+        subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
+        # subj_mask = subj_pos.eq(0).unsqueeze(2)
+        # obj_mask = obj_pos.eq(0).unsqueeze(2)
+        # pool_mask = torch.logical_xor(pool_mask.eq(0), (subj_mask + obj_mask))
+        # subj_mask, obj_mask, pool_mask = subj_mask.eq(0), obj_mask.eq(0), pool_mask.eq(0)
         pool_type = self.opt['pooling']
         h_out = pool(h, pool_mask, type=pool_type)
         subj_out = pool(h, subj_mask, type=pool_type)
