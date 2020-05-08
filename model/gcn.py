@@ -79,7 +79,8 @@ class GCNRelationModel(nn.Module):
             adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=False).reshape(1, maxlen, maxlen) for tree in trees]
             adj = np.concatenate(adj, axis=0)
             adj = torch.from_numpy(adj)
-            return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
+            return adj.cuda() if self.opt['cuda'] else Variable(adj)
+            # return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
 
         adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data)
         h, pool_mask = self.gcn(adj, inputs)
