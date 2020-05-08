@@ -142,6 +142,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
             h = head[i]
             nodes[i].idx = i
             nodes[i].dist = dist[i]
+            nodes[i].deprel = deprel[i]
             if h > 0 and i != highest_node:
                 assert nodes[h-1] is not None
                 nodes[h-1].add_child(nodes[i])
