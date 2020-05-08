@@ -71,7 +71,7 @@ class GCNTrainer(Trainer):
             self.criterion.cuda()
         self.optimizer = torch_utils.get_optimizer(opt['optim'], self.parameters, opt['lr'])
 
-    def update(self, batch, step_num, update_gap):
+    def update(self, batch):
         inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
 
         # step forward
@@ -86,15 +86,15 @@ class GCNTrainer(Trainer):
         if self.opt.get('pooling_l2', 0) > 0:
             loss += self.opt['pooling_l2'] * (pooling_output ** 2).sum(1).mean()
 
-        loss /= update_gap
-        loss_val = loss.item()
+        # loss /= update_gap
+        # loss_val = loss.item()
         # backward
-        loss.backward()
-        if step_num % update_gap == 0:
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.opt['max_grad_norm'])
-            self.optimizer.step()
-            self.optimizer.zero_grad()
-        return loss_val
+        # loss.backward()
+        # if step_num % update_gap == 0:
+        #     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.opt['max_grad_norm'])
+        #     self.optimizer.step()
+        #     self.optimizer.zero_grad()
+        return loss
 
     def predict(self, batch, unsort=True):
         inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])

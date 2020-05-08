@@ -164,6 +164,7 @@ best_dev_metrics = defaultdict(lambda: -np.inf)
 test_metrics_at_best_dev = defaultdict(lambda: -np.inf)
 
 # start training
+update_gap = int(50/opt['batch_size'])
 for epoch in range(1, opt['num_epoch']+1):
     train_loss = 0
     # Training in-case of mini-batches
@@ -173,13 +174,25 @@ for epoch in range(1, opt['num_epoch']+1):
     for i, batch in enumerate(train_batch):
         start_time = time.time()
         global_step += 1
-        loss = trainer.update(batch, step_num=i+1, update_gap=int(50/opt['batch_size']))
-        train_loss += loss
+        loss = trainer.update(batch) / update_gap
+        loss.backward()
+        loss_val = loss.item()
+        step_num = i+1
+        if step_num % update_gap == 0:
+            torch.nn.utils.clip_grad_norm_(trainer.model.parameters(), trainer.opt['max_grad_norm'])
+            trainer.optimizer.step()
+            trainer.optimizer.zero_grad()
+
+        train_loss += loss_val
         if global_step % opt['log_step'] == 0:
             duration = time.time() - start_time
             print(format_str.format(datetime.now(), global_step, max_steps, epoch,\
                     opt['num_epoch'], loss, duration, current_lr))
-    
+    # Update grads if needed
+    torch.nn.utils.clip_grad_norm_(trainer.model.parameters(), trainer.opt['max_grad_norm'])
+    trainer.optimizer.step()
+    trainer.optimizer.zero_grad()
+
     # eval on train
     print("Evaluating on train set...")
     train_predictions = []
