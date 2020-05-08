@@ -90,8 +90,8 @@ class GCNTrainer(Trainer):
         loss_val = loss.item()
         # backward
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.opt['max_grad_norm'])
         if step % mini_batch_length == 0:
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.opt['max_grad_norm'])
             self.optimizer.step()
             self.optimizer.zero_grad()
         return loss_val
