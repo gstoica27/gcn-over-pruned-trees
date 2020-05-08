@@ -174,13 +174,14 @@ class GCN(nn.Module):
             gcn_inputs = embs
 
         _, maxlen, encoding_dim = gcn_inputs.shape
-        deprel_adj = self.deprel_weight(adj)  # [B, T, T, H*H]
-        if self.opt['adj_type'] == 'diagonal_deprel':
-            deprel_adj = deprel_adj.reshape((-1, maxlen, maxlen, encoding_dim))
-        else:
-            deprel_adj = deprel_adj.reshape(
-                (-1, maxlen, maxlen, encoding_dim, encoding_dim)  # [B, T, T, H, H]
-            )
+        if self.opt['adj_type'] != 'adj':
+            deprel_adj = self.deprel_weight(adj)  # [B, T, T, H*H]
+            if self.opt['adj_type'] == 'diagonal_deprel':
+                deprel_adj = deprel_adj.reshape((-1, maxlen, maxlen, encoding_dim))
+            else:
+                deprel_adj = deprel_adj.reshape(
+                    (-1, maxlen, maxlen, encoding_dim, encoding_dim)  # [B, T, T, H, H]
+                )
 
         # gcn layer
         adj_matrix =  torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj))
@@ -215,9 +216,9 @@ class GCN(nn.Module):
                 # deprel_layer = deprel_transformed.squeeze(-1)
             elif self.opt['adj_type'] == 'adj':
                 # [B,T,T] x [B, T, H] -> [B,T,H]
-                deprel_layer = adj.bmm(gcn_inputs)
+                deprel_layer = adj_matrix.bmm(gcn_inputs)
             else:
-                raise ValueError('Adjecency Aggregation type not in supported set')
+                raise ValueError('Adjacency Aggregation type not in supported set')
             # [B,T,H] + [B,T,H]
             AxW = layer_transform(deprel_layer) + layer_transform(gcn_inputs)
             AxW /= num_children.type(torch.float32)
