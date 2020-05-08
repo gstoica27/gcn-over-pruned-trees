@@ -47,7 +47,7 @@ class Tree(object):
             for x in c:
                 yield x
 
-def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos):
+def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
     """
     Convert a sequence of head indexes into a tree object.
     """
@@ -62,6 +62,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos):
             h = head[i]
             nodes[i].idx = i
             nodes[i].dist = -1 # just a filler
+            nodes[i].deprel = deprel
             if h == 0:
                 root = nodes[i]
             else:
@@ -164,15 +165,20 @@ def tree_to_adj(sent_len, tree, directed=True, self_loop=False):
         idx += [t.idx]
 
         for c in t.children:
-            ret[t.idx, c.idx] = 1
+            # ret[t.idx, c.idx] = 1
+            ret[t.idx, c.idx] = c.deprel
+
+        if self_loop:
+            ret[t.idx, t.idx] = t.deprel
+
         queue += t.children
 
     if not directed:
         ret = ret + ret.T
 
-    if self_loop:
-        for i in idx:
-            ret[i, i] = 1
+    # if self_loop:
+    #     for i in idx:
+    #         ret[i, i] = 1
 
     return ret
 

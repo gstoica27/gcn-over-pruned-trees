@@ -73,16 +73,17 @@ class GCNRelationModel(nn.Module):
         l = (masks.data.cpu().numpy() == 0).astype(np.int64).sum(1)
         maxlen = max(l)
 
-        def inputs_to_tree_reps(head, words, l, prune, subj_pos, obj_pos):
+        def inputs_to_tree_reps(head, words, l, prune, subj_pos, obj_pos, deprel):
             head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
-            trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i]) for i in range(len(l))]
+            deprel = deprel.cpu().numpy()
+            trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i], deprel[i]) for i in range(len(l))]
             adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=False).reshape(1, maxlen, maxlen) for tree in trees]
             adj = np.concatenate(adj, axis=0)
             adj = torch.from_numpy(adj)
             return adj.cuda() if self.opt['cuda'] else Variable(adj)
             # return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
 
-        adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data)
+        adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data)
         h, pool_mask = self.gcn(adj, inputs)
         
         # pooling
@@ -157,14 +158,15 @@ class GCN(nn.Module):
             gcn_inputs = embs
         
         # gcn layer
-        denom = adj.sum(2).unsqueeze(2) + 1
-        mask = (adj.sum(2) + adj.sum(1)).eq(0).unsqueeze(2)
+        adj_matrix = torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj)).type(torch.float32)
+        denom = adj_matrix.sum(2).unsqueeze(2) + 1
+        mask = (adj_matrix.sum(2) + adj_matrix.sum(1)).eq(0).unsqueeze(2)
         # zero out adj for ablation
         if self.opt.get('no_adj', False):
-            adj = torch.zeros_like(adj)
+            adj_matrix = torch.zeros_like(adj_matrix)
 
         for l in range(self.layers):
-            Ax = adj.bmm(gcn_inputs)
+            Ax = adj_matrix.bmm(gcn_inputs)
             AxW = self.W[l](Ax)
             AxW = AxW + self.W[l](gcn_inputs) # self loop
             AxW = AxW / denom
