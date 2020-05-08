@@ -39,7 +39,7 @@ class GCNRelationModel(nn.Module):
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
         self.deprel_side = (2 * opt['rnn_hidden'])
-        if opt['diagonal_deprel']:
+        if opt['adj_type'] == 'diagonal_deprel':
             deprel_emb_size = self.deprel_side
         else:
             deprel_emb_size = self.deprel_side ** 2
@@ -175,7 +175,7 @@ class GCN(nn.Module):
 
         _, maxlen, encoding_dim = gcn_inputs.shape
         deprel_adj = self.deprel_weight(adj)  # [B, T, T, H*H]
-        if self.opt['diagonal_deprel']:
+        if self.opt['adj_type'] == 'diagonal_deprel':
             deprel_adj = deprel_adj.reshape((-1, maxlen, maxlen, encoding_dim))
         else:
             deprel_adj = deprel_adj.reshape(
@@ -190,13 +190,13 @@ class GCN(nn.Module):
             layer_transform = self.W[l]
             # [B,1,T,H]
             # layer_inputs = gcn_inputs.unsqueeze(1)
-            if self.opt['diagonal_deprel']:
+            if self.opt['adj_type'] == 'diagonal_deprel':
                 # [B,T,T,H] x [B,1,T,H]
                 layer_inputs = gcn_inputs.view((-1, 1,maxlen, encoding_dim))
                 deprel_transformed = layer_inputs * deprel_adj
                 # [B,T,T,H] -> [B,T,H]
                 deprel_layer = deprel_transformed.sum(2)
-            else:
+            elif self.opt['adj_type'] == 'full_deprel':
                 # [B,1,T,H] -> [B,1,T,1,H]
                 layer_inputs = gcn_inputs.view((-1, 1, maxlen, 1, encoding_dim))
                 # [B,T,T,H,H] x [B,1,T,1,H]
@@ -213,8 +213,13 @@ class GCN(nn.Module):
                 # deprel_transformed = deprel_transformed.sum(2)
                 # [B,T,H,1] -> [B,T,H]
                 # deprel_layer = deprel_transformed.squeeze(-1)
+            elif self.opt['adj_type'] == 'adj':
+                # [B,T,T] x [B, T, H] -> [B,T,H]
+                deprel_layer = adj.bmm(gcn_inputs)
+            else:
+                raise ValueError('Adjecency Aggregation type not in supported set')
             # [B,T,H] + [B,T,H]
-            AxW = deprel_layer + layer_transform(gcn_inputs)
+            AxW = layer_transform(deprel_layer) + layer_transform(gcn_inputs)
             AxW /= num_children.type(torch.float32)
             gAxW = F.relu(AxW)
             gcn_inputs = self.gcn_drop(gAxW) if l < self.layers -1 else gAxW

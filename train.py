@@ -87,7 +87,7 @@ parser.add_argument('--cpu', action='store_true', help='Ignore CUDA.')
 parser.add_argument('--load', dest='load', action='store_true', help='Load pretrained model.')
 parser.add_argument('--model_file', type=str, help='Filename of the pretrained model.')
 
-parser.add_argument('--diagonal_deprel', action='store_true')
+parser.add_argument('--adj_type', default='adj', help='How to aggregate dependecies in GCN layer')
 
 args = parser.parse_args()
 
