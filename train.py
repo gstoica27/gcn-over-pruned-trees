@@ -174,7 +174,7 @@ for epoch in range(1, opt['num_epoch']+1):
     for i, batch in enumerate(train_batch):
         start_time = time.time()
         global_step += 1
-        loss = trainer.update(batch) / update_gap
+        loss = trainer.update(batch) #/ update_gap
         loss.backward()
         loss_val = loss.item()
         step_num = i+1
