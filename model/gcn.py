@@ -38,7 +38,7 @@ class GCNRelationModel(nn.Module):
         self.emb = nn.Embedding(opt['vocab_size'], opt['emb_dim'], padding_idx=constant.PAD_ID)
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
-        self.deprel_side = (2 * opt['rnn_hidden'])
+        self.deprel_side = opt['hidden_dim']
         if opt['adj_type'] == 'diagonal_deprel':
             deprel_emb_size = self.deprel_side
         elif opt['adj_type'] == 'full_deprel':
@@ -132,11 +132,14 @@ class GCN(nn.Module):
         self.in_drop = nn.Dropout(opt['input_dropout'])
         self.gcn_drop = nn.Dropout(opt['gcn_dropout'])
 
+        # gcn input encoding
+        self.preprocessor = nn.Linear(self.in_dim, self.mem_dim)
         # gcn layer
         self.W = nn.ModuleList()
 
         for layer in range(self.layers):
-            input_dim = self.in_dim if layer == 0 else self.mem_dim
+            input_dim = self.mem_dim
+            # input_dim = self.in_dim if layer == 0 else self.mem_dim
             self.W.append(nn.Linear(input_dim, self.mem_dim))
 
     def conv_l2(self):
@@ -172,6 +175,8 @@ class GCN(nn.Module):
 
         batch_size, max_len, encoding_dim = gcn_inputs.shape
         if self.opt['adj_type'] != 'regular':
+            # Encode parameters for deprel changes
+            gcn_inputs = self.preprocessor(gcn_inputs)
             deprel_adj = self.deprel_emb(adj.type(torch.int64)) # [B,T,T,H/H^2]
             if self.opt['adj_type'] == 'diagonal_deprel':
                 # [B,T,T,H]
