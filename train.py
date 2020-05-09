@@ -90,6 +90,8 @@ parser.add_argument('--cpu', action='store_true', help='Ignore CUDA.')
 parser.add_argument('--load', dest='load', action='store_true', help='Load pretrained model.')
 parser.add_argument('--model_file', type=str, help='Filename of the pretrained model.')
 
+parser.add_argument('--adj_type', type=str, default='regular')
+
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -174,7 +176,7 @@ for epoch in range(1, opt['num_epoch']+1):
     for i, batch in enumerate(train_batch):
         start_time = time.time()
         global_step += 1
-        loss = trainer.update(batch) #/ update_gap
+        loss = trainer.update(batch)
         loss.backward()
         loss_val = loss.item()
         step_num = i+1

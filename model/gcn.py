@@ -38,7 +38,16 @@ class GCNRelationModel(nn.Module):
         self.emb = nn.Embedding(opt['vocab_size'], opt['emb_dim'], padding_idx=constant.PAD_ID)
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
-        embeddings = (self.emb, self.pos_emb, self.ner_emb)
+        self.deprel_side = (2 * opt['rnn_hidden'])
+        if opt['adj_type'] == 'diagonal_deprel':
+            deprel_emb_size = self.deprel_side
+        elif opt['adj_type'] == 'full_deprel':
+            deprel_emb_size = self.deprel_side ** 2
+        # regular adjacency matrix, thus fill with dummy weight
+        else:
+            deprel_emb_size = 1
+        self.deprel_weight = nn.Embedding(len(constant.DEPREL_TO_ID), deprel_emb_size, padding_idx=0)
+        embeddings = (self.emb, self.pos_emb, self.ner_emb, self.deprel_weight)
         self.init_embeddings()
 
         # gcn layer
@@ -110,7 +119,7 @@ class GCN(nn.Module):
         self.mem_dim = mem_dim
         self.in_dim = opt['emb_dim'] + opt['pos_dim'] + opt['ner_dim']
 
-        self.emb, self.pos_emb, self.ner_emb = embeddings
+        self.emb, self.pos_emb, self.ner_emb, self.deprel_emb = embeddings
 
         # rnn layer
         if self.opt.get('rnn', False):
@@ -160,7 +169,19 @@ class GCN(nn.Module):
             gcn_inputs = self.rnn_drop(self.encode_with_rnn(embs, masks, words.size()[0]))
         else:
             gcn_inputs = embs
-        
+
+        batch_size, max_len, encoding_dim = gcn_inputs.shape
+        if self.opt['adj_type'] != 'regular':
+            deprel_adj = self.deprel_emb(adj) # [B,T,T,H/H^2]
+            if self.opt['adj_type'] == 'diagonal_deprel':
+                # [B,T,T,H]
+                deprel_adj = deprel_adj.reshape((batch_size, max_len, max_len, encoding_dim))
+            else:
+                # [B,T,T,H,H]
+                deprel_adj = deprel_adj.reshape((batch_size, max_len, max_len, encoding_dim, encoding_dim))
+        else:
+            deprel_adj = None
+
         # gcn layer
         adj_matrix = torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj)).type(torch.float32)
         denom = adj_matrix.sum(2).unsqueeze(2) + 1
@@ -170,7 +191,28 @@ class GCN(nn.Module):
             adj_matrix = torch.zeros_like(adj_matrix)
 
         for l in range(self.layers):
-            Ax = adj_matrix.bmm(gcn_inputs)
+            if self.opt['adj_type'] == 'regular':
+                # [B,T1,T2] x [B,T2,H] -> [B,T1,H]
+                Ax = adj_matrix.bmm(gcn_inputs)
+            elif self.opt['adj_type'] == 'diagonal_deprel':
+                # [B,T1,H] -> [B,1,T2,H]
+                layer_inputs = gcn_inputs.view((batch_size, 1, max_len, encoding_dim))
+                # [B,T1,T2,H] x [B,1,T2,H] -> [B,T1,T2,H] -> [B,T1,H]
+                Ax = (deprel_adj * layer_inputs).sum(2)
+            elif self.opt['adj_type'] == 'full_deprel':
+                # [B,T1,H] -> [B,1,T2,H,1]
+                layer_inputs = gcn_inputs.view((batch_size, 1, max_len, encoding_dim, 1))
+                # [B,1,T2,H,1] -> [B,T1,T2,H,1]
+                layer_inputs = layer_inputs.repeat((1, max_len, 1, 1, 1))
+                # [B,T1,T2,H,H] x [B,T1,T2,H,1] -> [B,T1,T2,H,1]
+                deprel_attended = torch.einsum('abcde,abcef->abcdf', deprel_adj, layer_inputs)
+                # [B,T1,T2,H,1] -> [B,T1,T2,H]
+                deprel_attended = deprel_attended.squeeze(-1)
+                # [B,T1,T2,H] -> [B,T1,H]
+                Ax = deprel_attended.sum(2)
+            else:
+                raise ValueError('Adjacency aggregation type not supported.')
+
             AxW = self.W[l](Ax)
             AxW = AxW + self.W[l](gcn_inputs) # self loop
             AxW = AxW / denom
