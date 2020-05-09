@@ -173,10 +173,10 @@ class GCN(nn.Module):
         else:
             gcn_inputs = embs
 
-        batch_size, max_len, encoding_dim = gcn_inputs.shape
         if self.opt['adj_type'] != 'regular':
             # Encode parameters for deprel changes
             gcn_inputs = self.preprocessor(gcn_inputs)
+            batch_size, max_len, encoding_dim = gcn_inputs.shape
             deprel_adj = self.deprel_emb(adj.type(torch.int64)) # [B,T,T,H/H^2]
             if self.opt['adj_type'] == 'diagonal_deprel':
                 # [B,T,T,H]
@@ -185,6 +185,7 @@ class GCN(nn.Module):
                 # [B,T,T,H,H]
                 deprel_adj = deprel_adj.reshape((batch_size, max_len, max_len, encoding_dim, encoding_dim))
         else:
+            batch_size, max_len, encoding_dim = gcn_inputs.shape
             deprel_adj = None
 
         # gcn layer
