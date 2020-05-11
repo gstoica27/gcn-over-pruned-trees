@@ -5,6 +5,12 @@ Basic operations on trees.
 import numpy as np
 from collections import defaultdict
 from utils.constant import DEPREL_TO_ID
+# from utils.vocab import Vocab
+# vocab_dir = '/Volumes/External HDD/dataset/tacred/data/vocab'
+# vocab_file = vocab_dir + '/vocab.pkl'
+# vocab = Vocab(vocab_file, load=True)
+# id2vocab = {v:k for (k,v) in vocab.word2id.items()}
+# id2deprel = {v:k for (k,v) in DEPREL_TO_ID.items()}
 
 class Tree(object):
     """
@@ -54,6 +60,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
     """
     tokens = tokens[:len_].tolist()
     head = head[:len_].tolist()
+    deprel = deprel[:len_].tolist()
     root = None
 
     if prune < 0:

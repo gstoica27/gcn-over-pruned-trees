@@ -139,7 +139,7 @@ os.makedirs(test_save_dir, exist_ok=True)
 test_save_file = os.path.join(test_save_dir, 'test_records.pkl')
 test_confusion_save_file = os.path.join(test_save_dir, 'test_confusion_matrix.pkl')
 dev_confusion_save_file = os.path.join(test_save_dir, 'dev_confusion_matrix.pkl')
-
+deprel_save_file = os.path.join(test_save_dir, 'deprel_embs.pkl')
 # print model info
 helper.print_config(opt)
 
@@ -195,6 +195,10 @@ for epoch in range(1, opt['num_epoch']+1):
     torch.nn.utils.clip_grad_norm_(trainer.model.parameters(), trainer.opt['max_grad_norm'])
     trainer.optimizer.step()
     trainer.optimizer.zero_grad()
+
+    print("Saving Deprel Embeddings...")
+    with open(deprel_save_file, 'wb') as handle:
+        pickle.dump(trainer.get_deprel_emb(), handle)
 
     # eval on train
     print("Evaluating on train set...")

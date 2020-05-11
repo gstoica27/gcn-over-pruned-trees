@@ -109,3 +109,6 @@ class GCNTrainer(Trainer):
             _, predictions, probs = [list(t) for t in zip(*sorted(zip(orig_idx,\
                     predictions, probs)))]
         return predictions, probs, loss.item()
+
+    def get_deprel_emb(self):
+        return self.model.get_deprel_emb()

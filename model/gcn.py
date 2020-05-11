@@ -28,6 +28,9 @@ class GCNClassifier(nn.Module):
         logits = self.classifier(outputs)
         return logits, pooling_output
 
+    def get_deprel_emb(self):
+        return self.gcn_model.get_deprel_embedding()
+
 class GCNRelationModel(nn.Module):
     def __init__(self, opt, emb_matrix=None):
         super().__init__()
@@ -46,8 +49,8 @@ class GCNRelationModel(nn.Module):
         # regular adjacency matrix, thus fill with dummy weight
         else:
             deprel_emb_size = 1
-        self.deprel_weight = nn.Embedding(len(constant.DEPREL_TO_ID), deprel_emb_size, padding_idx=0)
-        embeddings = (self.emb, self.pos_emb, self.ner_emb, self.deprel_weight)
+        self.deprel_emb = nn.Embedding(len(constant.DEPREL_TO_ID), deprel_emb_size, padding_idx=0)
+        embeddings = (self.emb, self.pos_emb, self.ner_emb, self.deprel_emb)
         self.init_embeddings()
 
         # gcn layer
@@ -59,6 +62,9 @@ class GCNRelationModel(nn.Module):
         for _ in range(self.opt['mlp_layers']-1):
             layers += [nn.Linear(opt['hidden_dim'], opt['hidden_dim']), nn.ReLU()]
         self.out_mlp = nn.Sequential(*layers)
+
+    def get_deprel_embedding(self):
+        return self.deprel_emb.weight
 
     def init_embeddings(self):
         if self.emb_matrix is None:
@@ -89,8 +95,8 @@ class GCNRelationModel(nn.Module):
             adj = [tree_to_adj(maxlen, tree, directed=True, self_loop=True).reshape(1, maxlen, maxlen) for tree in trees]
             adj = np.concatenate(adj, axis=0)
             adj = torch.from_numpy(adj)
-            return adj.cuda() if self.opt['cuda'] else Variable(adj)
-            # return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
+            # return adj.cuda() if self.opt['cuda'] else Variable(adj)
+            return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
 
         adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data)
         h, pool_mask = self.gcn(adj, inputs)
@@ -100,7 +106,7 @@ class GCNRelationModel(nn.Module):
         # subj_mask = subj_pos.eq(0).unsqueeze(2)
         # obj_mask = obj_pos.eq(0).unsqueeze(2)
         # pool_mask = torch.logical_xor(pool_mask.eq(0), (subj_mask + obj_mask))
-        # subj_mask, obj_mask, pool_mask = subj_mask.eq(0), obj_mask.eq(0), pool_mask.eq(0)
+        # subj_mask, obj_mask, pool_mask = subj_mask.eq(0),  obj_mask.eq(0), pool_mask.eq(0)
         pool_type = self.opt['pooling']
         h_out = pool(h, pool_mask, type=pool_type)
         subj_out = pool(h, subj_mask, type=pool_type)
