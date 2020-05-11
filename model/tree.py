@@ -4,6 +4,7 @@ Basic operations on trees.
 
 import numpy as np
 from collections import defaultdict
+from utils.constant import DEPREL_TO_ID
 
 class Tree(object):
     """
@@ -62,7 +63,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
             h = head[i]
             nodes[i].idx = i
             nodes[i].dist = -1 # just a filler
-            nodes[i].deprel = deprel
+            nodes[i].deprel = deprel[i]
             if h == 0:
                 root = nodes[i]
             else:
@@ -143,6 +144,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
             nodes[i].idx = i
             nodes[i].dist = dist[i]
             nodes[i].deprel = deprel[i]
+            nodes[i].head = head[i]
             if h > 0 and i != highest_node:
                 assert nodes[h-1] is not None
                 nodes[h-1].add_child(nodes[i])
@@ -160,6 +162,8 @@ def tree_to_adj(sent_len, tree, directed=True, self_loop=False):
 
     queue = [tree]
     idx = []
+    seen_deprels = []
+    seen_head = []
     while len(queue) > 0:
         t, queue = queue[0], queue[1:]
 
@@ -168,14 +172,19 @@ def tree_to_adj(sent_len, tree, directed=True, self_loop=False):
         for c in t.children:
             # ret[t.idx, c.idx] = 1
             ret[t.idx, c.idx] = c.deprel
+            # Add reverse relation
+            if not directed:
+                # 42 is the added constant to obtain reverse id
+                ret[c.idx, t.idx] = c.deprel + 42
 
-        if self_loop:
+        if self_loop and DEPREL_TO_ID['ROOT'] == t.deprel:
             ret[t.idx, t.idx] = t.deprel
-
+        seen_deprels.append(t.deprel)
+        seen_head.append(t.head)
         queue += t.children
 
-    if not directed:
-        ret = ret + ret.T
+    # if not directed:
+    #     ret = ret + ret.T
 
     # if self_loop:
     #     for i in idx:

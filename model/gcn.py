@@ -39,7 +39,7 @@ class GCNRelationModel(nn.Module):
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
         self.deprel_side = opt['hidden_dim']
-        if opt['adj_type'] == 'diagonal_deprel':
+        if opt['adj_type'] in ['diagonal_deprel', 'concat_deprel']:
             deprel_emb_size = self.deprel_side
         elif opt['adj_type'] == 'full_deprel':
             deprel_emb_size = self.deprel_side ** 2
@@ -86,7 +86,7 @@ class GCNRelationModel(nn.Module):
             head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
             deprel = deprel.cpu().numpy()
             trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i], deprel[i]) for i in range(len(l))]
-            adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=False).reshape(1, maxlen, maxlen) for tree in trees]
+            adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=True).reshape(1, maxlen, maxlen) for tree in trees]
             adj = np.concatenate(adj, axis=0)
             adj = torch.from_numpy(adj)
             return adj.cuda() if self.opt['cuda'] else Variable(adj)
@@ -133,14 +133,16 @@ class GCN(nn.Module):
         self.gcn_drop = nn.Dropout(opt['gcn_dropout'])
 
         # gcn input encoding
-        self.preprocessor = nn.Linear(self.in_dim, self.mem_dim)
+        if opt['adj_type'] in ['diagonal_deprel', 'full_deprel']:
+            self.preprocessor = nn.Linear(self.in_dim, self.mem_dim)
+            self.in_dim = self.mem_dim
         # gcn layer
         self.W = nn.ModuleList()
-
         for layer in range(self.layers):
-            input_dim = self.mem_dim
-            # input_dim = self.in_dim if layer == 0 else self.mem_dim
-            self.W.append(nn.Linear(input_dim, self.mem_dim))
+            input_dim = self.in_dim if layer == 0 else self.mem_dim
+            if opt['adj_type'] == 'concat_deprel':
+                input_dim += self.deprel_emb.weight.shape[1]
+            self.W.append(nn.Linear(input_dim,  self.mem_dim))
 
     def conv_l2(self):
         conv_weights = []
@@ -178,14 +180,15 @@ class GCN(nn.Module):
         else:
             gcn_inputs = embs
 
-        if self.opt['adj_type'] != 'regular':
+        if self.opt['adj_type'] not in ['regular', 'concat_deprel']:
             # Encode parameters for deprel changes
             gcn_inputs = self.preprocessor(gcn_inputs)
-            batch_size, max_len, encoding_dim = gcn_inputs.shape
+        batch_size, max_len, encoding_dim = gcn_inputs.shape
+        if self.opt['adj_type'] != 'regular':
             deprel_adj = self.deprel_emb(adj.type(torch.int64)) # [B,T,T,H/H^2]
-            if self.opt['adj_type'] == 'diagonal_deprel':
+            if self.opt['adj_type'] in ['diagonal_deprel', 'concat_deprel']:
                 # [B,T,T,H]
-                deprel_adj = deprel_adj.reshape((batch_size, max_len, max_len, encoding_dim))
+                deprel_adj = deprel_adj.reshape((batch_size, max_len, max_len, -1))
             else:
                 # [B,T,T,H,H]
                 deprel_adj = deprel_adj.reshape((batch_size, max_len, max_len, encoding_dim, encoding_dim))
@@ -221,11 +224,19 @@ class GCN(nn.Module):
                 deprel_attended = deprel_attended.squeeze(-1)
                 # [B,T1,T2,H] -> [B,T1,H]
                 Ax = deprel_attended.sum(2)
+            elif self.opt['adj_type'] == 'concat_deprel':
+                # [B,T1,H] -> [B,1,T2,H]
+                layer_inputs = gcn_inputs.view((batch_size, 1, max_len, -1))
+                layer_inputs = layer_inputs.repeat((1, max_len, 1, 1))
+                # [B,1,T2,H] x [B,T1,T2,h] -> [B,T1,H]
+                layer_inputs = torch.cat([layer_inputs, deprel_adj], dim=-1)
+                Ax = layer_inputs.sum(2)
             else:
                 raise ValueError('Adjacency aggregation type not supported.')
 
             AxW = self.W[l](Ax)
-            AxW = AxW + self.W[l](gcn_inputs) # self loop
+            if self.opt['adj_type'] != 'concat_deprel':
+                AxW = AxW + self.W[l](gcn_inputs) # self loop
             AxW = AxW / denom
 
             gAxW = F.relu(AxW)
