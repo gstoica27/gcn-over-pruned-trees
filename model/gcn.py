@@ -238,7 +238,7 @@ class GCN(nn.Module):
             if self.opt['adj_type'] == 'concat_deprel':
                 zeroed_deprel = torch.zeros((batch_size, max_len, deprel_adj.shape[-1]), dtype=torch.float32)
                 if self.opt['cuda']:
-                    zeroed_deprel.cuda()
+                    zeroed_deprel = zeroed_deprel.cuda()
                 skip_inputs = torch.cat((gcn_inputs, zeroed_deprel), axis=-1)
                 AxW = AxW + self.W[l](skip_inputs) # self loop
             else:
