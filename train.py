@@ -91,6 +91,7 @@ parser.add_argument('--load', dest='load', action='store_true', help='Load pretr
 parser.add_argument('--model_file', type=str, help='Filename of the pretrained model.')
 
 parser.add_argument('--adj_type', type=str, default='regular')
+parser.add_argument('--deprel_emb_dim',type=str, default=200)
 
 args = parser.parse_args()
 

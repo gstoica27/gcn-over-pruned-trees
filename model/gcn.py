@@ -38,7 +38,7 @@ class GCNRelationModel(nn.Module):
         self.emb = nn.Embedding(opt['vocab_size'], opt['emb_dim'], padding_idx=constant.PAD_ID)
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
-        self.deprel_side = opt['hidden_dim']
+        self.deprel_side = opt['deprel_emb_dim'] ## set equal to hidden_dim mostly
         if opt['adj_type'] in ['diagonal_deprel', 'concat_deprel']:
             deprel_emb_size = self.deprel_side
         elif opt['adj_type'] == 'full_deprel':
@@ -235,8 +235,12 @@ class GCN(nn.Module):
                 raise ValueError('Adjacency aggregation type not supported.')
 
             AxW = self.W[l](Ax)
-            # if self.opt['adj_type'] != 'concat_deprel':
-            AxW = AxW + self.W[l](gcn_inputs) # self loop
+            if self.opt['adj_type'] == 'concat_deprel':
+                zeroed_deprel = torch.zeros((batch_size, max_len, deprel_adj.shape[-1]), dtype=torch.float32)
+                skip_inputs = torch.cat((gcn_inputs, zeroed_deprel), axis=-1)
+                AxW = AxW + self.W[l](skip_inputs) # self loop
+            else:
+                AxW = AxW + self.W[l](gcn_inputs) # self loop
             AxW = AxW / denom
 
             gAxW = F.relu(AxW)
