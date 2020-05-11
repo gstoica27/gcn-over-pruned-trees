@@ -235,8 +235,8 @@ class GCN(nn.Module):
                 raise ValueError('Adjacency aggregation type not supported.')
 
             AxW = self.W[l](Ax)
-            if self.opt['adj_type'] != 'concat_deprel':
-                AxW = AxW + self.W[l](gcn_inputs) # self loop
+            # if self.opt['adj_type'] != 'concat_deprel':
+            AxW = AxW + self.W[l](gcn_inputs) # self loop
             AxW = AxW / denom
 
             gAxW = F.relu(AxW)
