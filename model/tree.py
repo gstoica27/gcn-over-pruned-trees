@@ -62,6 +62,9 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
     head = head[:len_].tolist()
     deprel = deprel[:len_].tolist()
     root = None
+    # find dependency path
+    subj_pos = [i for i in range(len_) if subj_pos[i] == 0]
+    obj_pos = [i for i in range(len_) if obj_pos[i] == 0]
 
     if prune < 0:
         nodes = [Tree() for _ in head]
@@ -76,10 +79,6 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
             else:
                 nodes[h-1].add_child(nodes[i])
     else:
-        # find dependency path
-        subj_pos = [i for i in range(len_) if subj_pos[i] == 0]
-        obj_pos = [i for i in range(len_) if obj_pos[i] == 0]
-
         cas = None
 
         subj_ancestors = set(subj_pos)
@@ -158,8 +157,30 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
 
         root = nodes[highest_node]
 
+    subject_root = find_tree_component(tree=root, component_idxs=set(subj_pos))
+    object_root = find_tree_component(tree=root, component_idxs=set(obj_pos))
+
     assert root is not None
-    return root
+    assert subject_root is not None
+    assert object_root is not None
+    return (root, subject_root, object_root)
+
+def find_tree_component(tree, component_idxs):
+    queue = [tree]
+    seen_nodes = set()
+    while len(queue) > 0:
+        node = queue.pop(0)
+        idx = node.idx
+        # avoid repeats
+        if idx in seen_nodes:
+            continue
+        seen_nodes.add(idx)
+        # Because of BFS, the first idx in component idxs found is guaranteed to
+        # be the highest in the tree.
+        if idx in component_idxs:
+            return node
+        queue += node.children
+    raise ValueError('Component Indexes are not in the Tree')
 
 def tree_to_adj(sent_len, tree, directed=True, self_loop=False):
     """

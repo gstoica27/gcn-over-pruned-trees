@@ -9,6 +9,7 @@ from torch.autograd import Variable
 import numpy as np
 
 from model.tree import Tree, head_to_tree, tree_to_adj
+from model.tree_lstm import ChildSumTreeLSTM
 from utils import constant, torch_utils
 
 class GCNClassifier(nn.Module):
@@ -97,14 +98,15 @@ class GCNRelationModel(nn.Module):
             head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
             deprel = deprel.cpu().numpy()
             trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i], deprel[i]) for i in range(len(l))]
-            adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=False).reshape(1, maxlen, maxlen) for tree in trees]
-            adj = np.concatenate(adj, axis=0)
-            adj = torch.from_numpy(adj)
+            # adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=False).reshape(1, maxlen, maxlen) for tree in trees]
+            # adj = np.concatenate(adj, axis=0)
+            # adj = torch.from_numpy(adj)
             # return adj.cuda() if self.opt['cuda'] else Variable(adj)
-            return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
+            # return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
+            return trees
 
-        adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data)
-        h, pool_mask = self.gcn(adj, inputs)
+        trees = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data)
+        tree_encodings = self.gcn(trees, inputs)
         
         # pooling
         subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
@@ -112,13 +114,13 @@ class GCNRelationModel(nn.Module):
         # obj_mask = obj_pos.eq(0).unsqueeze(2)
         # pool_mask = torch.logical_xor(pool_mask.eq(0), (subj_mask + obj_mask))
         # subj_mask, obj_mask, pool_mask = subj_mask.eq(0),  obj_mask.eq(0), pool_mask.eq(0)
-        pool_type = self.opt['pooling']
-        h_out = pool(h, pool_mask, type=pool_type)
-        subj_out = pool(h, subj_mask, type=pool_type)
-        obj_out = pool(h, obj_mask, type=pool_type)
-        outputs = torch.cat([h_out, subj_out, obj_out], dim=1)
+        # pool_type = self.opt['pooling']
+        # h_out = pool(h, pool_mask, type=pool_type)
+        # subj_out = pool(h, subj_mask, type=pool_type)
+        # obj_out = pool(h, obj_mask, type=pool_type)
+        outputs = torch.cat(list(tree_encodings), dim=1)
         outputs = self.out_mlp(outputs)
-        return outputs, h_out
+        return outputs, tree_encodings[0]
 
 class GCN(nn.Module):
     """ A GCN/Contextualized GCN module operated on dependency graphs. """
@@ -135,7 +137,7 @@ class GCN(nn.Module):
         # rnn layer
         if self.opt.get('rnn', False):
             input_size = self.in_dim
-            self.rnn = nn.LSTM(input_size, opt['rnn_hidden'], opt['rnn_layers'], batch_first=True, \
+            self.rnn = nn.LSTM(input_size, opt['rnn_hidden'], opt['rnn_layers'], batch_first=True,
                     dropout=opt['rnn_dropout'], bidirectional=True)
             self.in_dim = opt['rnn_hidden'] * 2
             self.rnn_drop = nn.Dropout(opt['rnn_dropout']) # use on last layer output
@@ -143,22 +145,7 @@ class GCN(nn.Module):
         self.in_drop = nn.Dropout(opt['input_dropout'])
         self.gcn_drop = nn.Dropout(opt['gcn_dropout'])
 
-        # gcn input encoding
-        if opt['adj_type'] in ['diagonal_deprel', 'full_deprel']:
-            self.preprocessor = nn.Linear(self.in_dim, self.mem_dim)
-            self.in_dim = self.mem_dim
-        if opt['adj_type'] == 'only_deprel':
-            self.mem_dim = self.deprel_emb.weight.shape[1]
-        # gcn layer
-        self.W = nn.ModuleList()
-        for layer in range(self.layers):
-            input_dim = self.in_dim if layer == 0 else self.mem_dim
-            if opt['adj_type'] == 'concat_deprel' and layer == 0:
-                input_dim += self.deprel_emb.weight.shape[1]
-                self.deprel_dropout = nn.Dropout(opt.get('deprel_dropout', 0.0))
-            elif opt['adj_type'] == 'only_deprel':
-                input_dim = self.deprel_emb.weight.shape[1]
-            self.W.append(nn.Linear(input_dim,  self.mem_dim))
+        self.tree_lstm = ChildSumTreeLSTM(in_dim=self.in_dim, mem_dim=self.mem_dim)
 
     def conv_l2(self):
         conv_weights = []
@@ -179,7 +166,7 @@ class GCN(nn.Module):
         rnn_outputs, _ = nn.utils.rnn.pad_packed_sequence(rnn_outputs, batch_first=True)
         return rnn_outputs
 
-    def forward(self, adj, inputs):
+    def forward(self, trees, inputs):
         words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
         word_embs = self.emb(words)
         embs = [word_embs]
@@ -196,74 +183,26 @@ class GCN(nn.Module):
         else:
             gcn_inputs = embs
 
-        if self.opt['adj_type'] not in {'regular', 'concat_deprel', 'only_deprel'}:
-            # Encode parameters for deprel changes
-            gcn_inputs = self.preprocessor(gcn_inputs)
-        batch_size, max_len, encoding_dim = gcn_inputs.shape
-        if self.opt['adj_type'] != 'regular':
-            deprel_adj = self.deprel_emb(adj.type(torch.int64)) # [B,T,T,H/H^2]
-            if self.opt['adj_type'] in {'diagonal_deprel', 'concat_deprel', 'only_deprel'}:
-                # [B,T,T,H]
-                deprel_adj = deprel_adj.reshape((batch_size, max_len, max_len, -1))
-            else:
-                # [B,T,T,H,H]
-                deprel_adj = deprel_adj.reshape((batch_size, max_len, max_len, encoding_dim, encoding_dim))
-        else:
-            batch_size, max_len, encoding_dim = gcn_inputs.shape
-            deprel_adj = None
+        # Dimensions:
+        #   - trees: [B, TreeLength]
+        #   - encodings: [B, T1, H]
+        batch_roots = []
+        batch_subjects = []
+        batch_objects = []
+        for idx in range(gcn_inputs.shape[0]):
+            root, subject_root, object_root = trees[idx]
+            sentence_encodings = gcn_inputs[idx]
+            root_encoded = self.tree_lstm(root, sentence_encodings)[0]
+            subject_encoded = self.tree_lstm(subject_root, sentence_encodings)[0]
+            object_encoded = self.tree_lstm(object_root, sentence_encodings)[0]
+            batch_roots.append(root_encoded)
+            batch_subjects.append(subject_encoded)
+            batch_objects.append(object_encoded)
 
-        # gcn layer
-        adj_matrix = torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj)).type(torch.float32)
-        denom = adj_matrix.sum(2).unsqueeze(2) + 1
-        mask = (adj_matrix.sum(2) + adj_matrix.sum(1)).eq(0).unsqueeze(2)
-        # zero out adj for ablation
-        if self.opt.get('no_adj', False):
-            adj_matrix = torch.zeros_like(adj_matrix)
-        if self.opt['adj_type'] == 'only_deprel':
-            # Previous stage is zero b/c no convolution has passed yet
-            gcn_inputs = torch.zeros_like(deprel_adj.sum(2))
-        elif self.opt['adj_type'] == 'concat_deprel':
-            deprel_embs = self.deprel_dropout(self.deprel_emb(deprel))
-            gcn_inputs = torch.cat([gcn_inputs, deprel_embs], dim=-1)
-        for l in range(self.layers):
-            if self.opt['adj_type'] == 'regular':
-                # [B,T1,T2] x [B,T2,H] -> [B,T1,H]
-                Ax = adj_matrix.bmm(gcn_inputs)
-            elif self.opt['adj_type'] == 'diagonal_deprel':
-                # [B,T1,H] -> [B,1,T2,H]
-                layer_inputs = gcn_inputs.view((batch_size, 1, max_len, encoding_dim))
-                # [B,T1,T2,H] x [B,1,T2,H] -> [B,T1,T2,H] -> [B,T1,H]
-                Ax = (deprel_adj * layer_inputs).sum(2)
-            elif self.opt['adj_type'] == 'full_deprel':
-                # [B,T1,H] -> [B,1,T2,H,1]
-                layer_inputs = gcn_inputs.view((batch_size, 1, max_len, encoding_dim, 1))
-                # [B,1,T2,H,1] -> [B,T1,T2,H,1]
-                layer_inputs = layer_inputs.repeat((1, max_len, 1, 1, 1))
-                # [B,T1,T2,H,H] x [B,T1,T2,H,1] -> [B,T1,T2,H,1]
-                deprel_attended = torch.einsum('abcde,abcef->abcdf', deprel_adj, layer_inputs)
-                # [B,T1,T2,H,1] -> [B,T1,T2,H]
-                deprel_attended = deprel_attended.squeeze(-1)
-                # [B,T1,T2,H] -> [B,T1,H]
-                Ax = deprel_attended.sum(2)
-            elif self.opt['adj_type'] == 'concat_deprel':
-                # [B,T1,H]
-                Ax = adj_matrix.bmm(gcn_inputs)
-            elif self.opt['adj_type'] == 'only_deprel':
-                # [B,T1,T2,H] -> [B,T1,H]
-                current_connections = deprel_adj.sum(2)
-                layer_inputs = gcn_inputs + current_connections
-                Ax = layer_inputs
-            else:
-                raise ValueError('Adjacency aggregation type not supported.')
-
-            AxW = self.W[l](Ax)
-            AxW = AxW + self.W[l](gcn_inputs) # self loop
-            AxW = AxW / denom
-
-            gAxW = F.relu(AxW)
-            gcn_inputs = self.gcn_drop(gAxW) if l < self.layers - 1 else gAxW
-
-        return gcn_inputs, mask
+        batch_roots = torch.cat(batch_roots, dim=0)
+        batch_subjects = torch.cat(batch_subjects, dim=0)
+        batch_objects = torch.cat(batch_objects, dim=0)
+        return batch_roots, batch_subjects, batch_objects
 
 def pool(h, mask, type='max'):
     if type == 'max':
