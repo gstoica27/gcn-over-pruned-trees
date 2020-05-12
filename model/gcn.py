@@ -155,6 +155,7 @@ class GCN(nn.Module):
             input_dim = self.in_dim if layer == 0 else self.mem_dim
             if opt['adj_type'] == 'concat_deprel' and layer == 0:
                 input_dim += self.deprel_emb.weight.shape[1]
+                self.deprel_dropout = nn.Dropout(opt.get('deprel_dropout', 0.0))
             elif opt['adj_type'] == 'only_deprel':
                 input_dim = self.deprel_emb.weight.shape[1]
             self.W.append(nn.Linear(input_dim,  self.mem_dim))
@@ -222,7 +223,7 @@ class GCN(nn.Module):
             # Previous stage is zero b/c no convolution has passed yet
             gcn_inputs = torch.zeros_like(deprel_adj.sum(2))
         elif self.opt['adj_type'] == 'concat_deprel':
-            deprel_embs = self.deprel_emb(deprel)
+            deprel_embs = self.deprel_dropout(self.deprel_emb(deprel))
             gcn_inputs = torch.cat([gcn_inputs, deprel_embs], dim=-1)
         for l in range(self.layers):
             if self.opt['adj_type'] == 'regular':
