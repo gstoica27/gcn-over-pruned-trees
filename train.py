@@ -90,7 +90,7 @@ parser.add_argument('--cpu', action='store_true', help='Ignore CUDA.')
 parser.add_argument('--load', dest='load', action='store_true', help='Load pretrained model.')
 parser.add_argument('--model_file', type=str, help='Filename of the pretrained model.')
 
-parser.add_argument('--adj_type', type=str, default='regular')
+# parser.add_argument('--adj_type', type=str, default='regular')
 parser.add_argument('--deprel_emb_dim',type=int, default=200)
 parser.add_argument('--deprel_dropout', type=float, default=.5)
 
@@ -197,9 +197,9 @@ for epoch in range(1, opt['num_epoch']+1):
     trainer.optimizer.step()
     trainer.optimizer.zero_grad()
 
-    print("Saving Deprel Embeddings...")
-    with open(deprel_save_file, 'wb') as handle:
-        pickle.dump(trainer.get_deprel_emb(), handle)
+    # print("Saving Deprel Embeddings...")
+    # with open(deprel_save_file, 'wb') as handle:
+    #     pickle.dump(trainer.get_deprel_emb(), handle)
 
     # eval on train
     print("Evaluating on train set...")

@@ -42,28 +42,17 @@ class GCNRelationModel(nn.Module):
         self.emb = nn.Embedding(opt['vocab_size'], opt['emb_dim'], padding_idx=constant.PAD_ID)
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
-        self.deprel_side = opt['deprel_emb_dim'] ## set equal to hidden_dim mostly
-        if opt['adj_type'] in ['diagonal_deprel', 'concat_deprel']:
-            deprel_emb_size = self.deprel_side
-        elif opt['adj_type'] == 'full_deprel':
-            deprel_emb_size = self.deprel_side ** 2
-        elif opt['adj_type'] == 'only_deprel':
-            deprel_emb_size = self.deprel_side
-        # regular adjacency matrix, thus fill with dummy weight
-        else:
-            deprel_emb_size = 1
-        self.deprel_emb = nn.Embedding(len(constant.DEPREL_TO_ID), deprel_emb_size, padding_idx=0)
-        embeddings = (self.emb, self.pos_emb, self.ner_emb, self.deprel_emb)
+        # self.deprel_side = opt['deprel_emb_dim'] ## set equal to hidden_dim mostly
+        # self.deprel_emb = nn.Embedding(len(constant.DEPREL_TO_ID), self.deprel_side, padding_idx=0)
+        # embeddings = (self.emb, self.pos_emb, self.ner_emb, self.deprel_emb)
+        embeddings = (self.emb, self.pos_emb, self.ner_emb)
         self.init_embeddings()
 
         # gcn layer
         self.gcn = GCN(opt, embeddings, opt['hidden_dim'], opt['num_layers'])
 
         # output mlp layers
-        if opt['adj_type'] == 'only_deprel':
-            in_dim = self.deprel_side * 3
-        else:
-            in_dim = opt['hidden_dim']*3
+        in_dim = opt['hidden_dim']*3
         layers = [nn.Linear(in_dim, opt['hidden_dim']), nn.ReLU()]
         for _ in range(self.opt['mlp_layers']-1):
             layers += [nn.Linear(opt['hidden_dim'], opt['hidden_dim']), nn.ReLU()]
@@ -132,8 +121,8 @@ class GCN(nn.Module):
         self.mem_dim = mem_dim
         self.in_dim = opt['emb_dim'] + opt['pos_dim'] + opt['ner_dim']
 
-        self.emb, self.pos_emb, self.ner_emb, self.deprel_emb = embeddings
-
+        # self.emb, self.pos_emb, self.ner_emb, self.deprel_emb = embeddings
+        self.emb, self.pos_emb, self.ner_emb = embeddings
         # rnn layer
         if self.opt.get('rnn', False):
             input_size = self.in_dim
