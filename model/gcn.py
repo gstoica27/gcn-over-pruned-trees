@@ -242,12 +242,10 @@ class GCN(nn.Module):
                 # [B,T1,T2,H] -> [B,T1,H]
                 Ax = deprel_attended.sum(2)
             elif self.opt['adj_type'] == 'concat_deprel':
-                # [B,T1,H] -> [B,1,T2,H]
-                layer_inputs = gcn_inputs.view((batch_size, 1, max_len, -1))
-                layer_inputs = layer_inputs.repeat((1, max_len, 1, 1))
-                # [B,1,T2,H] x [B,T1,T2,h] -> [B,T1,H]
-                layer_inputs = torch.cat([layer_inputs, deprel_adj], dim=-1)
-                Ax = layer_inputs.sum(2)
+                # [B,T1,H]
+                deprel_embs = self.deprel_emb(deprel)
+                gcn_inputs = torch.cat([gcn_inputs, deprel_embs], dim=-1)
+                Ax = adj_matrix.bmm(gcn_inputs)
             elif self.opt['adj_type'] == 'only_deprel':
                 # [B,T1,T2,H] -> [B,T1,H]
                 current_connections = deprel_adj.sum(2)
@@ -257,14 +255,7 @@ class GCN(nn.Module):
                 raise ValueError('Adjacency aggregation type not supported.')
 
             AxW = self.W[l](Ax)
-            if self.opt['adj_type'] == 'concat_deprel':
-                zeroed_deprel = torch.zeros((batch_size, max_len, deprel_adj.shape[-1]), dtype=torch.float32)
-                if self.opt['cuda']:
-                    zeroed_deprel = zeroed_deprel.cuda()
-                skip_inputs = torch.cat((gcn_inputs, zeroed_deprel), axis=-1)
-                AxW = AxW + self.W[l](skip_inputs) # self loop
-            else:
-                AxW = AxW + self.W[l](gcn_inputs) # self loop
+            AxW = AxW + self.W[l](gcn_inputs) # self loop
             AxW = AxW / denom
 
             gAxW = F.relu(AxW)
