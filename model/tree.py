@@ -157,13 +157,15 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
 
         root = nodes[highest_node]
 
-    subject_root = find_tree_component(tree=root, component_idxs=set(subj_pos))
-    object_root = find_tree_component(tree=root, component_idxs=set(obj_pos))
-
+    # subject_root = find_tree_component(tree=root, component_idxs=set(subj_pos))
+    # object_root = find_tree_component(tree=root, component_idxs=set(obj_pos))
+    tree_depth = find_tree_depth(root)
     assert root is not None
-    assert subject_root is not None
-    assert object_root is not None
-    return (root, subject_root, object_root)
+    assert tree_depth > 1
+    # assert subject_root is not None
+    # assert object_root is not None
+    root.depth = tree_depth
+    return root
 
 def find_tree_component(tree, component_idxs):
     queue = [tree]
@@ -182,9 +184,21 @@ def find_tree_component(tree, component_idxs):
         queue += node.children
     raise ValueError('Component Indexes are not in the Tree')
 
-def tree_to_adj(sent_len, tree, directed=True, self_loop=False):
+def find_tree_depth(tree):
+    if len(tree.children) == 0:
+        return 1
+    else:
+        children_depths = []
+        for child in tree.children:
+            child_depth = find_tree_depth(child)
+            children_depths.append(child_depth)
+        return max(children_depths) + 1
+
+def tree_to_adj(sent_len, tree, batch_idx, directed=True, self_loop=False):
     """
     Convert a tree object to an (numpy) adjacency matrix.
+    The adjacency matrix must be 2-indexed in order for
+    the downstream tree_lstm to be correct.
     """
     ret = np.zeros((sent_len, sent_len), dtype=np.float32)
 
@@ -199,14 +213,17 @@ def tree_to_adj(sent_len, tree, directed=True, self_loop=False):
 
         for c in t.children:
             # ret[t.idx, c.idx] = 1
-            ret[t.idx, c.idx] = c.deprel
+            ret[t.idx, c.idx] = c.idx + 2 + (sent_len) * batch_idx
             # Add reverse relation
-            if not directed:
+            # if not directed:
                 # 42 is the added constant to obtain reverse id
-                ret[c.idx, t.idx] = c.deprel + 42
-
-        if self_loop and DEPREL_TO_ID['ROOT'] == t.deprel:
-            ret[t.idx, t.idx] = t.deprel
+                # ret[c.idx, t.idx] = c.deprel + 42
+        # If a node has no children, it is a leaf node. Specify "1"
+        # in order for it to use the zero-hidden initial state.
+        if sum(ret[t.idx]) == 0:
+            ret[t.idx, 0] = 1 + (sent_len) * batch_idx
+        # if self_loop and DEPREL_TO_ID['ROOT'] == t.deprel:
+        #     ret[t.idx, t.idx] = t.deprel
         seen_deprels.append(t.deprel)
         seen_head.append(t.head)
         queue += t.children

@@ -9,7 +9,7 @@ from torch.autograd import Variable
 import numpy as np
 
 from model.tree import Tree, head_to_tree, tree_to_adj
-from model.tree_lstm import ChildSumTreeLSTM
+from model.tree_lstm import BatchedChildSumTreeLSTM
 from utils import constant, torch_utils
 
 class GCNClassifier(nn.Module):
@@ -49,7 +49,7 @@ class GCNRelationModel(nn.Module):
         self.init_embeddings()
 
         # gcn layer
-        self.gcn = GCN(opt, embeddings, opt['hidden_dim'], opt['num_layers'])
+        self.tree_lstm_wrapper = TreeLSTMWrapper(opt, embeddings, opt['hidden_dim'], opt['num_layers'])
 
         # output mlp layers
         in_dim = opt['hidden_dim']*3
@@ -87,15 +87,21 @@ class GCNRelationModel(nn.Module):
             head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
             deprel = deprel.cpu().numpy()
             trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i], deprel[i]) for i in range(len(l))]
-            # adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=False).reshape(1, maxlen, maxlen) for tree in trees]
-            # adj = np.concatenate(adj, axis=0)
-            # adj = torch.from_numpy(adj)
-            # return adj.cuda() if self.opt['cuda'] else Variable(adj)
-            # return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
-            return trees
+            # Maximum tree depth in batch. Used to know how many LSTM steps are needed
+            max_depth = max(list(map(lambda node:node.depth, trees)))
+            adj = [tree_to_adj(maxlen, tree,
+                               batch_idx=idx,
+                               directed=False,
+                               self_loop=False).reshape(1, maxlen, maxlen) for idx, tree in enumerate(trees)]
+            adj = np.concatenate(adj, axis=0)
+            adj = torch.from_numpy(adj) # [B,T1,T2]
+            return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj), max_depth
+            # return trees
 
-        trees = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data)
-        tree_encodings = self.gcn(trees, inputs)
+        tree_adj, max_depth = inputs_to_tree_reps(
+            head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data
+        )
+        tree_encodings, pool_mask = self.tree_lstm_wrapper(tree_adj, inputs, max_depth)
         
         # pooling
         subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
@@ -103,18 +109,18 @@ class GCNRelationModel(nn.Module):
         # obj_mask = obj_pos.eq(0).unsqueeze(2)
         # pool_mask = torch.logical_xor(pool_mask.eq(0), (subj_mask + obj_mask))
         # subj_mask, obj_mask, pool_mask = subj_mask.eq(0),  obj_mask.eq(0), pool_mask.eq(0)
-        # pool_type = self.opt['pooling']
-        # h_out = pool(h, pool_mask, type=pool_type)
-        # subj_out = pool(h, subj_mask, type=pool_type)
-        # obj_out = pool(h, obj_mask, type=pool_type)
-        outputs = torch.cat(list(tree_encodings), dim=1)
+        pool_type = self.opt['pooling']
+        h_out = pool(tree_encodings, pool_mask, type=pool_type)
+        subj_out = pool(tree_encodings, subj_mask, type=pool_type)
+        obj_out = pool(tree_encodings, obj_mask, type=pool_type)
+        outputs = torch.cat([h_out, subj_out, obj_out], dim=1)
         outputs = self.out_mlp(outputs)
-        return outputs, tree_encodings[0]
+        return outputs, h_out
 
-class GCN(nn.Module):
+class TreeLSTMWrapper(nn.Module):
     """ A GCN/Contextualized GCN module operated on dependency graphs. """
     def __init__(self, opt, embeddings, mem_dim, num_layers):
-        super(GCN, self).__init__()
+        super(TreeLSTMWrapper, self).__init__()
         self.opt = opt
         self.layers = num_layers
         self.use_cuda = opt['cuda']
@@ -134,7 +140,7 @@ class GCN(nn.Module):
         self.in_drop = nn.Dropout(opt['input_dropout'])
         self.gcn_drop = nn.Dropout(opt['gcn_dropout'])
 
-        self.tree_lstm = ChildSumTreeLSTM(in_dim=self.in_dim, mem_dim=self.mem_dim)
+        self.tree_lstm = BatchedChildSumTreeLSTM(in_dim=self.in_dim, mem_dim=self.mem_dim)
 
     def conv_l2(self):
         conv_weights = []
@@ -155,7 +161,7 @@ class GCN(nn.Module):
         rnn_outputs, _ = nn.utils.rnn.pad_packed_sequence(rnn_outputs, batch_first=True)
         return rnn_outputs
 
-    def forward(self, trees, inputs):
+    def forward(self, trees, inputs, max_depth):
         words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
         word_embs = self.emb(words)
         embs = [word_embs]
@@ -172,26 +178,88 @@ class GCN(nn.Module):
         else:
             gcn_inputs = embs
 
-        # Dimensions:
-        #   - trees: [B, TreeLength]
-        #   - encodings: [B, T1, H]
-        batch_roots = []
-        batch_subjects = []
-        batch_objects = []
-        for idx in range(gcn_inputs.shape[0]):
-            root, subject_root, object_root = trees[idx]
-            sentence_encodings = gcn_inputs[idx]
-            root_encoded = self.tree_lstm(root, sentence_encodings)[0]
-            subject_encoded = self.tree_lstm(subject_root, sentence_encodings)[0]
-            object_encoded = self.tree_lstm(object_root, sentence_encodings)[0]
-            batch_roots.append(root_encoded)
-            batch_subjects.append(subject_encoded)
-            batch_objects.append(object_encoded)
+        batch_size, token_size, hidden_dim = gcn_inputs.shape
+        hidden_state, cell_state = self.init_zero_state(
+            batch_size=self.mem_dim, token_size=token_size,
+            hidden_dim=self.mem_dim, use_cuda=self.opt['cuda']
+        ) # hidden: [B,T1+2,H] cell: [B,T1+2,H]
+        # [B,T1,T2] -> [B,T1,T2,1]. This is effectively a type of adjacency matrix
+        mask = trees.eq(0).eq(0).unsqueeze(-1).type(torch.float32)
+        # mask = torch.where(trees != 0, torch.ones_like(trees), torch.zeros_like(trees)).type(torch.float32)
+        # Adjacency matrix is 2-indexed, so anything less than 2 is treated as a "PAD" value, and masked out
+        # in sentence pooling downstream
+        sentence_mask = torch.where(trees > 1, torch.ones_like(trees), torch.zeros_like(trees)).type(torch.float32)
+        directed = False
+        if not directed:
+            sentence_mask += sentence_mask.permute(0, 2, 1)
+        sentence_mask = (sentence_mask.sum(2) + sentence_mask.sum(1)).eq(0).unsqueeze(2)
 
-        batch_roots = torch.cat(batch_roots, dim=0)
-        batch_subjects = torch.cat(batch_subjects, dim=0)
-        batch_objects = torch.cat(batch_objects, dim=0)
-        return batch_roots, batch_subjects, batch_objects
+        for level in range(max_depth):
+            # Flatten hidden/cell state in order perform lookup
+            # [B,T1,H] -> [BxT1,H]
+            flat_hidden_state = hidden_state.reshape((-1, hidden_state.shape[-1]))
+            flat_cell_states = cell_state.reshape((-1, hidden_state.shape[-1]))
+            # [BxT1,H] ([B,T1,T2]) -> [B,T1,T2,H]
+            child_hidden_states = F.embedding(trees.type(torch.long), flat_hidden_state, 0, 2, False, False)   # [B,T1,T2,H]
+            child_cell_states = F.embedding(trees.type(torch.long), flat_cell_states, 0, 2, False, False)       # [B,T1,T2,H]
+            new_hidden_states, new_cell_states = self.tree_lstm(
+                gcn_inputs, child_hidden_states, child_cell_states, mask
+            )
+            # Add "padded" cells to hidden and cell states so that 2-indexed Adjacency
+            # matrix works + we preserve same cell/hidden state for precomputed nodes
+            # throughout depth iterations.
+            # [B,2,H]
+            hidden_pad = Variable(torch.zeros((batch_size, 2, hidden_state.shape[-1]),
+                                              dtype=torch.float32),
+                                  requires_grad=False)
+            cell_pad = Variable(torch.zeros((batch_size, 2, hidden_state.shape[-1]),
+                                            dtype=torch.float32),
+                                requires_grad=False)
+            if self.opt['cuda']:
+                hidden_pad = hidden_pad.cuda()
+                cell_pad = cell_pad.cuda()
+            # Haven't reached tree root yet, pad for indexing again
+            if level < max_depth - 1:
+                # [[B,2,H];[B,T1,H]] -> [B,T1+2,H]
+                hidden_state = torch.cat([hidden_pad, new_hidden_states], dim=1)
+                cell_state = torch.cat([cell_pad, new_cell_states], dim=1)
+            else:
+                hidden_state = new_hidden_states
+                cell_state = new_cell_states
+
+        return hidden_state, sentence_mask
+
+        # # Dimensions:
+        # #   - trees: [B, TreeLength]
+        # #   - encodings: [B, T1, H]
+        # batch_roots = []
+        # batch_subjects = []
+        # batch_objects = []
+        # for idx in range(gcn_inputs.shape[0]):
+        #     root, subject_root, object_root = trees[idx]
+        #     sentence_encodings = gcn_inputs[idx]
+        #     root_encoded = self.tree_lstm(root, sentence_encodings)[0]
+        #     subject_encoded = self.tree_lstm(subject_root, sentence_encodings)[0]
+        #     object_encoded = self.tree_lstm(object_root, sentence_encodings)[0]
+        #     batch_roots.append(root_encoded)
+        #     batch_subjects.append(subject_encoded)
+        #     batch_objects.append(object_encoded)
+        #
+        # batch_roots = torch.cat(batch_roots, dim=0)
+        # batch_subjects = torch.cat(batch_subjects, dim=0)
+        # batch_objects = torch.cat(batch_objects, dim=0)
+        # return batch_roots, batch_subjects, batch_objects
+
+    def init_zero_state(self, batch_size, token_size, hidden_dim, use_cuda=False):
+        # token_size +1 necessary because Adjacencies are 2 indexed. 0 is the padding
+        # index, and 1 is the actual "zero" hidden state used by the leaf nodes
+        hidden_shape = (batch_size, token_size + 2, hidden_dim)
+        cell_shape = (batch_size, token_size + 2, hidden_dim)
+        h0 =  Variable(torch.zeros(*hidden_shape), requires_grad=False)
+        c0 =  Variable(torch.zeros(*cell_shape), requires_grad=False)
+        if use_cuda:
+            h0, c0 = h0.cuda(), c0.cuda()
+        return h0, c0
 
 def pool(h, mask, type='max'):
     if type == 'max':
