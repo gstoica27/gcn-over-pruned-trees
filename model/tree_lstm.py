@@ -70,21 +70,22 @@ class BatchedChildSumTreeLSTM(nn.Module):
             - hidden states for each leaf node              [B,T1,H]
             - cell states for each leaf node                [B,T1,H]
         """
+        num_children = child_hidden.shape[2]
         h_j = (child_hidden * child_mask).sum(2)          # [B,T1,H]
         x_iouf = self.x_iouf(inputs)                      # [B,T1,4H]
         h_iou = self.h_iou(h_j)                           # [B,T1,3H]
         x_i, x_o, x_u, x_f = torch.split(x_iouf, int(x_iouf.shape[-1] / 4), dim=2)
         h_i, h_o, h_u = torch.split(h_iou, int(h_iou.shape[-1] / 3), dim=2)
 
-        i_j = F.sigmoid(x_i + h_i)
-        o_j = F.sigmoid(x_o + h_o)
-        u_j = F.tanh(x_u + h_u)
+        i_j = torch.sigmoid(x_i + h_i)
+        o_j = torch.sigmoid(x_o + h_o)
+        u_j = torch.tanh(x_u + h_u)
 
         h_f = self.h_f(child_hidden)  # [B,T1,T2,H]
-        f_jk = F.sigmoid(x_f.unsqueeze(1) + h_f)        # [B,T1,T2,H]
+        f_jk = torch.sigmoid(x_f[:, :num_children, :].unsqueeze(1) + h_f)        # [B,T1,T2,H]
         # [B,T1,T2,H]x[B,T1,T2,H]x[B,T1,T2,1] -> [B,T1,H]
         c_j_rhs = (f_jk * child_cell * child_mask).sum(2)
         c = i_j * u_j + c_j_rhs                         # [B,T1,H]
         # [B,T1,H]x[B,T1,H]
-        h = o_j * F.tanh(c)
+        h = o_j * torch.tanh(c)
         return h, c

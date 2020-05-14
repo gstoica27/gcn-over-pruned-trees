@@ -78,6 +78,24 @@ class GCNRelationModel(nn.Module):
         else:
             print("Finetune all embeddings.")
 
+    def find_adj_bounds(self, adj_matrix):
+        """
+        Find actual bounds over adjacency matrix. I.e. how many cols/rows are actually needed.
+         Can significantly reduce memory load with this
+        :param adj_matrix: np.array(max_len, max_len)
+        :return: (row_top_offset, row_bottom_offset, col_right_offset)
+        """
+        if len(adj_matrix.shape) == 3:
+            matrix = adj_matrix[0]
+        else:
+            matrix = adj_matrix
+        col_right_offset = max([np.sum(row != 0) for row in matrix])
+        is_pad_row = np.any(matrix, axis=1)
+        non_pad_rows = np.where(is_pad_row)[0]
+        row_top_offset = min(non_pad_rows)
+        row_bottom_offset = max(non_pad_rows) + 1
+        return (row_top_offset, row_bottom_offset, col_right_offset)
+
     def forward(self, inputs):
         words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
         l = (masks.data.cpu().numpy() == 0).astype(np.int64).sum(1)
@@ -93,15 +111,22 @@ class GCNRelationModel(nn.Module):
                                batch_idx=idx,
                                directed=False,
                                self_loop=False).reshape(1, maxlen, maxlen) for idx, tree in enumerate(trees)]
+            adj_bounds = [self.find_adj_bounds(adj_matrix) for adj_matrix in adj]
             adj = np.concatenate(adj, axis=0)
+
+            row_top_offsets, row_bottom_offsets, col_right_offsets = zip(*adj_bounds)
+            max_bottom_offset = max(row_bottom_offsets)
+            max_col_offset = max(col_right_offsets)
+            adj = adj[:, :, :max_col_offset]
+
             adj = torch.from_numpy(adj) # [B,T1,T2]
-            return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj), max_depth
+            return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj), max_depth, max_bottom_offset
             # return trees
 
-        tree_adj, max_depth = inputs_to_tree_reps(
+        tree_adj, max_depth, max_bottom_offset = inputs_to_tree_reps(
             head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data
         )
-        tree_encodings, pool_mask = self.tree_lstm_wrapper(tree_adj, inputs, max_depth)
+        tree_encodings, pool_mask = self.tree_lstm_wrapper(tree_adj, inputs, max_depth, max_bottom_offset)
         
         # pooling
         subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
@@ -161,7 +186,7 @@ class TreeLSTMWrapper(nn.Module):
         rnn_outputs, _ = nn.utils.rnn.pad_packed_sequence(rnn_outputs, batch_first=True)
         return rnn_outputs
 
-    def forward(self, trees, inputs, max_depth):
+    def forward(self, trees, inputs, max_depth, max_bottom_offset):
         words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
         word_embs = self.emb(words)
         embs = [word_embs]
@@ -191,6 +216,8 @@ class TreeLSTMWrapper(nn.Module):
         sentence_mask = torch.where(trees > 1, torch.ones_like(trees), torch.zeros_like(trees)).type(torch.float32)
         directed = False
         if not directed:
+            # Make adjacency matrix square for undirectedness if necessary
+            sentence_mask = self.maybe_squarify_matrix(sentence_mask)
             sentence_mask += sentence_mask.permute(0, 2, 1)
         sentence_mask = (sentence_mask.sum(2) + sentence_mask.sum(1)).eq(0).unsqueeze(2)
 
@@ -203,18 +230,22 @@ class TreeLSTMWrapper(nn.Module):
             child_hidden_states = F.embedding(trees.type(torch.long), flat_hidden_state, 0, 2, False, False)   # [B,T1,T2,H]
             child_cell_states = F.embedding(trees.type(torch.long), flat_cell_states, 0, 2, False, False)       # [B,T1,T2,H]
             new_hidden_states, new_cell_states = self.tree_lstm(
-                gcn_inputs, child_hidden_states, child_cell_states, mask
+                gcn_inputs, #[:,:max_bottom_offset,:],
+                child_hidden_states,
+                child_cell_states,
+                mask
             )
             # Add "padded" cells to hidden and cell states so that 2-indexed Adjacency
             # matrix works + we preserve same cell/hidden state for precomputed nodes
             # throughout depth iterations.
             # [B,2,H]
             hidden_pad = Variable(torch.zeros((batch_size, 2, hidden_state.shape[-1]),
-                                              dtype=torch.float32),
-                                  requires_grad=False)
+                                      dtype=torch.float32),
+                                      requires_grad=False)
             cell_pad = Variable(torch.zeros((batch_size, 2, hidden_state.shape[-1]),
-                                            dtype=torch.float32),
-                                requires_grad=False)
+                                    dtype=torch.float32),
+                                    requires_grad=False)
+
             if self.opt['cuda']:
                 hidden_pad = hidden_pad.cuda()
                 cell_pad = cell_pad.cuda()
@@ -249,6 +280,19 @@ class TreeLSTMWrapper(nn.Module):
         # batch_subjects = torch.cat(batch_subjects, dim=0)
         # batch_objects = torch.cat(batch_objects, dim=0)
         # return batch_roots, batch_subjects, batch_objects
+
+    def maybe_squarify_matrix(self, matrix):
+        batch_size, height, width = matrix.shape
+        pad_amount = abs(height - width)
+        if width < height:
+            pad_tensor = torch.zeros((batch_size, height, pad_amount))
+            padded_matrix = torch.cat([matrix, pad_tensor], dim=2)
+        elif height < width:
+            pad_tensor = torch.zeros((batch_size, pad_amount, width))
+            padded_matrix = torch.cat([matrix, pad_tensor], dim=1)
+        else:
+            padded_matrix = matrix
+        return padded_matrix
 
     def init_zero_state(self, batch_size, token_size, hidden_dim, use_cuda=False):
         # token_size +1 necessary because Adjacencies are 2 indexed. 0 is the padding

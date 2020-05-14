@@ -210,10 +210,9 @@ def tree_to_adj(sent_len, tree, batch_idx, directed=True, self_loop=False):
         t, queue = queue[0], queue[1:]
 
         idx += [t.idx]
-
-        for c in t.children:
+        for add_idx, c in enumerate(t.children):
             # ret[t.idx, c.idx] = 1
-            ret[t.idx, c.idx] = c.idx + 2 + (sent_len) * batch_idx
+            ret[t.idx, add_idx] = c.idx + 2 + (sent_len) * batch_idx
             # Add reverse relation
             # if not directed:
                 # 42 is the added constant to obtain reverse id
