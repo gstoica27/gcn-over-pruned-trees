@@ -286,9 +286,11 @@ class TreeLSTMWrapper(nn.Module):
         pad_amount = abs(height - width)
         if width < height:
             pad_tensor = torch.zeros((batch_size, height, pad_amount))
+            if self.opt['cuda']: pad_tensor = pad_tensor.cuda()
             padded_matrix = torch.cat([matrix, pad_tensor], dim=2)
         elif height < width:
             pad_tensor = torch.zeros((batch_size, pad_amount, width))
+            if self.opt['cuda']: pad_tensor = pad_tensor.cuda()
             padded_matrix = torch.cat([matrix, pad_tensor], dim=1)
         else:
             padded_matrix = matrix
