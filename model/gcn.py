@@ -164,8 +164,12 @@ class TreeLSTMWrapper(nn.Module):
 
         self.in_drop = nn.Dropout(opt['input_dropout'])
         self.gcn_drop = nn.Dropout(opt['gcn_dropout'])
-
-        self.tree_lstm = BatchedChildSumTreeLSTM(in_dim=self.in_dim, mem_dim=self.mem_dim)
+        self.tree_lstms = nn.ModuleList()
+        for layer in range(opt.get('num_tree_lstms', 1)):
+            input_dim = self.in_dim if layer == 0 else self.mem_dim
+            self.tree_lstms.append(BatchedChildSumTreeLSTM(in_dim=input_dim,
+                                                           mem_dim=self.mem_dim,
+                                                           on_cuda=opt['cuda']))
 
     def conv_l2(self):
         conv_weights = []
@@ -203,11 +207,6 @@ class TreeLSTMWrapper(nn.Module):
         else:
             gcn_inputs = embs
 
-        batch_size, token_size, hidden_dim = gcn_inputs.shape
-        hidden_state, cell_state = self.init_zero_state(
-            batch_size=self.mem_dim, token_size=token_size,
-            hidden_dim=self.mem_dim, use_cuda=self.opt['cuda']
-        ) # hidden: [B,T1+2,H] cell: [B,T1+2,H]
         # [B,T1,T2] -> [B,T1,T2,1]. This is effectively a type of adjacency matrix
         mask = trees.eq(0).eq(0).unsqueeze(-1).type(torch.float32)
         # mask = torch.where(trees != 0, torch.ones_like(trees), torch.zeros_like(trees)).type(torch.float32)
@@ -221,65 +220,12 @@ class TreeLSTMWrapper(nn.Module):
             sentence_mask += sentence_mask.permute(0, 2, 1)
         sentence_mask = (sentence_mask.sum(2) + sentence_mask.sum(1)).eq(0).unsqueeze(2)
 
-        for level in range(max_depth):
-            # Flatten hidden/cell state in order perform lookup
-            # [B,T1,H] -> [BxT1,H]
-            flat_hidden_state = hidden_state.reshape((-1, hidden_state.shape[-1]))
-            flat_cell_states = cell_state.reshape((-1, hidden_state.shape[-1]))
-            # [BxT1,H] ([B,T1,T2]) -> [B,T1,T2,H]
-            child_hidden_states = F.embedding(trees.type(torch.long), flat_hidden_state, 0, 2, False, False)   # [B,T1,T2,H]
-            child_cell_states = F.embedding(trees.type(torch.long), flat_cell_states, 0, 2, False, False)       # [B,T1,T2,H]
-            new_hidden_states, new_cell_states = self.tree_lstm(
-                gcn_inputs, #[:,:max_bottom_offset,:],
-                child_hidden_states,
-                child_cell_states,
-                mask
-            )
-            # Add "padded" cells to hidden and cell states so that 2-indexed Adjacency
-            # matrix works + we preserve same cell/hidden state for precomputed nodes
-            # throughout depth iterations.
-            # [B,2,H]
-            hidden_pad = Variable(torch.zeros((batch_size, 2, hidden_state.shape[-1]),
-                                      dtype=torch.float32),
-                                      requires_grad=False)
-            cell_pad = Variable(torch.zeros((batch_size, 2, hidden_state.shape[-1]),
-                                    dtype=torch.float32),
-                                    requires_grad=False)
-
-            if self.opt['cuda']:
-                hidden_pad = hidden_pad.cuda()
-                cell_pad = cell_pad.cuda()
-            # Haven't reached tree root yet, pad for indexing again
-            if level < max_depth - 1:
-                # [[B,2,H];[B,T1,H]] -> [B,T1+2,H]
-                hidden_state = torch.cat([hidden_pad, new_hidden_states], dim=1)
-                cell_state = torch.cat([cell_pad, new_cell_states], dim=1)
-            else:
-                hidden_state = new_hidden_states
-                cell_state = new_cell_states
+        lstm_inputs = gcn_inputs
+        for tree_lstm in self.tree_lstms:
+            lstm_inputs = tree_lstm(lstm_inputs, trees, mask, max_depth)
+        hidden_state = lstm_inputs
 
         return hidden_state, sentence_mask
-
-        # # Dimensions:
-        # #   - trees: [B, TreeLength]
-        # #   - encodings: [B, T1, H]
-        # batch_roots = []
-        # batch_subjects = []
-        # batch_objects = []
-        # for idx in range(gcn_inputs.shape[0]):
-        #     root, subject_root, object_root = trees[idx]
-        #     sentence_encodings = gcn_inputs[idx]
-        #     root_encoded = self.tree_lstm(root, sentence_encodings)[0]
-        #     subject_encoded = self.tree_lstm(subject_root, sentence_encodings)[0]
-        #     object_encoded = self.tree_lstm(object_root, sentence_encodings)[0]
-        #     batch_roots.append(root_encoded)
-        #     batch_subjects.append(subject_encoded)
-        #     batch_objects.append(object_encoded)
-        #
-        # batch_roots = torch.cat(batch_roots, dim=0)
-        # batch_subjects = torch.cat(batch_subjects, dim=0)
-        # batch_objects = torch.cat(batch_objects, dim=0)
-        # return batch_roots, batch_subjects, batch_objects
 
     def maybe_squarify_matrix(self, matrix):
         batch_size, height, width = matrix.shape

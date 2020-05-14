@@ -50,16 +50,16 @@ class ChildSumTreeLSTM(nn.Module):
         return tree.state
 
 class BatchedChildSumTreeLSTM(nn.Module):
-    def __init__(self, in_dim, mem_dim):
+    def __init__(self, in_dim, mem_dim, on_cuda):
         super(BatchedChildSumTreeLSTM, self).__init__()
         self.in_dim = in_dim
         self.mem_dim = mem_dim
-
+        self.on_cuda = on_cuda
         self.x_iouf = nn.Linear(self.in_dim, 4 * self.mem_dim)
         self.h_iou = nn.Linear(self.mem_dim, 3 * self.mem_dim)
         self.h_f = nn.Linear(self.mem_dim, self.mem_dim)
 
-    def forward(self, inputs, child_hidden, child_cell, child_mask):
+    def step(self, inputs, child_hidden, child_cell, child_mask):
         """
         Forward cell of batched child sum lstm
         :param inputs: token encodings. Size                [B,T1,H]
@@ -89,3 +89,61 @@ class BatchedChildSumTreeLSTM(nn.Module):
         # [B,T1,H]x[B,T1,H]
         h = o_j * torch.tanh(c)
         return h, c
+
+    def forward(self, token_encodings, trees, child_mask, max_depth):
+        batch_size, token_size, hidden_dim = token_encodings.shape
+        # hidden: [B,T1+2,H] cell: [B,T1+2,H]
+        hidden_state, cell_state = self.init_zero_state(
+            batch_size=batch_size, token_size=token_size,
+            hidden_dim=self.mem_dim, use_cuda=self.on_cuda
+        )
+        for level in range(max_depth):
+            # Flatten hidden/cell state in order perform lookup
+            # [B,T1,H] -> [BxT1,H]
+            flat_hidden_state = hidden_state.reshape((-1, hidden_state.shape[-1]))
+            flat_cell_states = cell_state.reshape((-1, hidden_state.shape[-1]))
+            # [BxT1,H] ([B,T1,T2]) -> [B,T1,T2,H]
+            child_hidden_states = F.embedding(trees.type(torch.long), flat_hidden_state, 0, 2, False,
+                                              False)  # [B,T1,T2,H]
+            child_cell_states = F.embedding(trees.type(torch.long), flat_cell_states, 0, 2, False, False)
+
+            new_hidden_states, new_cell_states = self.step(
+                token_encodings,  # [:,:max_bottom_offset,:],
+                child_hidden_states,
+                child_cell_states,
+                child_mask
+            )
+            # Add "padded" cells to hidden and cell states so that 2-indexed Adjacency
+            # matrix works + we preserve same cell/hidden state for precomputed nodes
+            # throughout depth iterations.
+            # [B,2,H]
+            hidden_pad = Variable(torch.zeros((batch_size, 2, hidden_state.shape[-1]),
+                                              dtype=torch.float32),
+                                  requires_grad=False)
+            cell_pad = Variable(torch.zeros((batch_size, 2, hidden_state.shape[-1]),
+                                            dtype=torch.float32),
+                                requires_grad=False)
+
+            if self.on_cuda:
+                hidden_pad = hidden_pad.cuda()
+                cell_pad = cell_pad.cuda()
+            # Haven't reached tree root yet, pad for indexing again
+            if level < max_depth - 1:
+                # [[B,2,H];[B,T1,H]] -> [B,T1+2,H]
+                hidden_state = torch.cat([hidden_pad, new_hidden_states], dim=1)
+                cell_state = torch.cat([cell_pad, new_cell_states], dim=1)
+            else:
+                hidden_state = new_hidden_states
+                cell_state = new_cell_states
+        return hidden_state
+
+    def init_zero_state(self, batch_size, token_size, hidden_dim, use_cuda=False):
+        # token_size +1 necessary because Adjacencies are 2 indexed. 0 is the padding
+        # index, and 1 is the actual "zero" hidden state used by the leaf nodes
+        hidden_shape = (batch_size, token_size + 2, hidden_dim)
+        cell_shape = (batch_size, token_size + 2, hidden_dim)
+        h0 = Variable(torch.zeros(*hidden_shape), requires_grad=False)
+        c0 = Variable(torch.zeros(*cell_shape), requires_grad=False)
+        if use_cuda:
+            h0, c0 = h0.cuda(), c0.cuda()
+        return h0, c0
