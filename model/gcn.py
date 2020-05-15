@@ -46,7 +46,11 @@ class GCNRelationModel(nn.Module):
         # self.deprel_side = opt['deprel_emb_dim'] ## set equal to hidden_dim mostly
         # self.deprel_emb = nn.Embedding(len(constant.DEPREL_TO_ID), self.deprel_side, padding_idx=0)
         # embeddings = (self.emb, self.pos_emb, self.ner_emb, self.deprel_emb)
-        embeddings = (self.emb, self.pos_emb, self.ner_emb)
+        if opt.get('deprel_emb_dim', 0) > 0:
+            self.deprel_emb = nn.Embedding(len(constant.DEPREL_TO_ID), opt['deprel_emb_dim'], padding_idx=0)
+        else:
+            self.deprel_emb = None
+        embeddings = (self.emb, self.pos_emb, self.ner_emb, self.deprel_emb)
         self.init_embeddings()
 
         # gcn layer
@@ -153,8 +157,8 @@ class TreeLSTMWrapper(nn.Module):
         self.mem_dim = mem_dim
         self.in_dim = opt['emb_dim'] + opt['pos_dim'] + opt['ner_dim']
 
-        # self.emb, self.pos_emb, self.ner_emb, self.deprel_emb = embeddings
-        self.emb, self.pos_emb, self.ner_emb = embeddings
+        self.emb, self.pos_emb, self.ner_emb, self.deprel_emb = embeddings
+        # self.emb, self.pos_emb, self.ner_emb = embeddings
         self.emb_dropout = EmbeddingDropout(opt['input_dropout'])
         # rnn layer
         if self.opt.get('rnn', False):
@@ -173,7 +177,8 @@ class TreeLSTMWrapper(nn.Module):
                                                            mem_dim=self.mem_dim,
                                                            on_cuda=opt['cuda'],
                                                            x_dropout=opt['tree_x_dropout'],
-                                                           h_dropout=opt['tree_h_dropout']))
+                                                           h_dropout=opt['tree_h_dropout'],
+                                                           deprel_emb=opt.get('deprel_emb_dim', 0)))
 
     def conv_l2(self):
         conv_weights = []
@@ -227,7 +232,14 @@ class TreeLSTMWrapper(nn.Module):
 
         lstm_inputs = gcn_inputs
         for tree_lstm in self.tree_lstms:
-            lstm_inputs = tree_lstm(lstm_inputs, trees, mask, max_depth)
+            if self.deprel_emb is not None:
+                batch_deprel_embs = self.deprel_emb(deprel)
+                batch_size, token_len, emb_dim = batch_deprel_embs.shape
+                flat_deprel_embs = batch_deprel_embs.reshape((batch_size * token_len, emb_dim))
+                child_deprel_embs = F.embedding(trees.type(torch.long), flat_deprel_embs, 0, 2, False, False)
+            else:
+                child_deprel_embs = None
+            lstm_inputs = tree_lstm(lstm_inputs, trees, mask, max_depth, child_deprel_embs)
         hidden_state = lstm_inputs
 
         return hidden_state, sentence_mask
