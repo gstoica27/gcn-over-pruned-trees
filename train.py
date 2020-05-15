@@ -299,17 +299,26 @@ for epoch in range(1, opt['num_epoch']+1):
 
         component_save_dir = os.path.join(test_save_dir, 'components')
         os.makedirs(component_save_dir, exist_ok=True)
+
         dev_components_save_dir = os.path.join(component_save_dir, 'dev')
         os.makedirs(dev_components_save_dir, exist_ok=True)
         print(f'Saving Dev logits to: {dev_components_save_dir}')
         for name, data in dev_components.items():
             with open(os.path.join(dev_components_save_dir, name + '.pkl'), 'wb') as handle:
                 pickle.dump(data, handle)
+
         test_components_save_dir = os.path.join(component_save_dir, 'test')
         os.makedirs(test_components_save_dir, exist_ok=True)
         print(f'Saving Test logits to: {test_components_save_dir}')
         for name, data in test_components.items():
             with open(os.path.join(test_components_save_dir, name + '.pkl'), 'wb') as handle:
+                pickle.dump(data, handle)
+
+        train_components_save_dir = os.path.join(component_save_dir, 'train')
+        os.makedirs(train_components_save_dir, exist_ok=True)
+        print(f'Saving Train logits to: {train_components_save_dir}')
+        for name, data in train_components.items():
+            with open(os.path.join(train_components_save_dir, name + '.pkl'), 'wb') as handle:
                 pickle.dump(data, handle)
 
     print("Best Dev Metrics | F1: {} | Precision: {} | Recall: {}".format(
