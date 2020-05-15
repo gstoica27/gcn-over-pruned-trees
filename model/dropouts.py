@@ -46,6 +46,8 @@ class EmbeddingDropout(nn.Module):
         self.dropout = dropout
 
     def forward(self, emb_matrix, input_values):
+        if not self.training or self.dropout <= 0.:
+            return emb_matrix(input_values)
         unique_values = torch.unique(input_values)
         emb_mask = torch.zeros((emb_matrix.weight.shape[0], 1), dtype=torch.float32)
         unique_mask = torch.empty(unique_values.shape[0], 1,  requires_grad=False).bernoulli_(1 - self.dropout)

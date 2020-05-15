@@ -145,6 +145,10 @@ test_save_file = os.path.join(test_save_dir, 'test_records.pkl')
 test_confusion_save_file = os.path.join(test_save_dir, 'test_confusion_matrix.pkl')
 dev_confusion_save_file = os.path.join(test_save_dir, 'dev_confusion_matrix.pkl')
 deprel_save_file = os.path.join(test_save_dir, 'deprel_embs.pkl')
+# Record saving over time
+test_perf_save_file = os.path.join(test_save_dir, 'test_metrics.txt')
+dev_perf_save_file = os.path.join(test_save_dir, 'dev_metrics.txt')
+train_perf_save_file = os.path.join(test_save_dir, 'train_metrics.txt')
 # print model info
 helper.print_config(opt)
 
@@ -276,6 +280,10 @@ for epoch in range(1, opt['num_epoch']+1):
     print("Test Metrics at Best Dev | F1: {} | Precision: {} | Recall: {}".format(
         test_metrics_at_best_dev['f1'], test_metrics_at_best_dev['precision'], test_metrics_at_best_dev['recall']
     ))
+    # Record all metrics in associated files
+    helper.record_metrics(train_perf_save_file, train_p, train_r, train_f1)
+    helper.record_metrics(dev_perf_save_file, dev_p, dev_r, dev_f1)
+    helper.record_metrics(test_perf_save_file, test_p, test_r, test_f1)
     
     # save
     model_file = model_save_dir + '/checkpoint_epoch_{}.pt'.format(epoch)

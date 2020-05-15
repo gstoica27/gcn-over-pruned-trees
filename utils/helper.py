@@ -63,3 +63,7 @@ class FileLogger(object):
         with open(self.filename, 'a') as out:
             print(message, file=out)
 
+def record_metrics(save_file, precision, recall, f1):
+    with open(save_file, 'a') as handle:
+        save_str = '{:.4f}\t{:.4f}\t{:.4f}\n'.format(precision, recall, f1)
+        handle.write(save_str)
