@@ -10,6 +10,7 @@ import numpy as np
 
 from model.gcn import GCNClassifier
 from utils import constant, torch_utils
+import os
 
 class Trainer(object):
     def __init__(self, opt, emb_matrix=None):
@@ -60,7 +61,7 @@ def unpack_batch(batch, cuda):
     return inputs, labels, tokens, head, subj_pos, obj_pos, lens
 
 class GCNTrainer(Trainer):
-    def __init__(self, opt, emb_matrix=None):
+    def __init__(self, opt, emb_matrix=None, save_dir=None):
         self.opt = opt
         self.emb_matrix = emb_matrix
         self.model = GCNClassifier(opt, emb_matrix=emb_matrix)
@@ -71,13 +72,19 @@ class GCNTrainer(Trainer):
             self.criterion.cuda()
         self.optimizer = torch_utils.get_optimizer(opt['optim'], self.parameters, opt['lr'])
 
+        if save_dir is not None:
+            self.sentence_save_file = os.path.join(save_dir, 'sentence.pkl')
+            self.subject_save_file = os.path.join(save_dir, 'subject.pkl')
+            self.object_save_file = os.path.join(save_dir, 'object.pkl')
+
     def update(self, batch):
         inputs, labels, tokens, head, subj_pos, obj_pos, lens = unpack_batch(batch, self.opt['cuda'])
 
         # step forward
         # self.model.train()
         # self.optimizer.zero_grad()
-        logits, pooling_output = self.model(inputs)
+        logits, pooling_output, component_encs = self.model(inputs)
+        subj_enc, obj_enc = component_encs
         loss = self.criterion(logits, labels)
         # l2 decay on all conv layers
         if self.opt.get('conv_l2', 0) > 0:
@@ -101,14 +108,19 @@ class GCNTrainer(Trainer):
         orig_idx = batch[11]
         # forward
         self.model.eval()
-        logits, _ = self.model(inputs)
+        logits, pooling_output, component_encs = self.model(inputs)
+        subj_enc, obj_enc = component_encs
+        pooling_output = pooling_output.data.cpu().numpy().tolist()
+        subj_enc = subj_enc.data.cpu().numpy().tolist()
+        obj_enc = obj_enc.data.cpu().numpy().tolist()
+
         loss = self.criterion(logits, labels)
         probs = F.softmax(logits, 1).data.cpu().numpy().tolist()
         predictions = np.argmax(logits.data.cpu().numpy(), axis=1).tolist()
         if unsort:
-            _, predictions, probs = [list(t) for t in zip(*sorted(zip(orig_idx,\
-                    predictions, probs)))]
-        return predictions, probs, loss.item()
+            _, predictions, probs, pooling_output, subj_enc, obj_enc = [list(t) for t in zip(*sorted(zip(orig_idx,
+                    predictions, probs, pooling_output, subj_enc, obj_enc)))]
+        return predictions, probs, loss.item(), (pooling_output, subj_enc, obj_enc)
 
     def get_deprel_emb(self):
         return self.model.get_deprel_emb()

@@ -91,7 +91,7 @@ parser.add_argument('--load', dest='load', action='store_true', help='Load pretr
 parser.add_argument('--model_file', type=str, help='Filename of the pretrained model.')
 
 # parser.add_argument('--adj_type', type=str, default='regular')
-parser.add_argument('--deprel_emb_dim',type=int, default=200)
+parser.add_argument('--deprel_emb_dim',type=int, default=0)
 parser.add_argument('--deprel_dropout', type=float, default=.5)
 
 parser.add_argument('--num_tree_lstms', type=int, default=1)
@@ -213,12 +213,20 @@ for epoch in range(1, opt['num_epoch']+1):
     print("Evaluating on train set...")
     train_predictions = []
     train_eval_loss = 0
+    train_components = {'sentence': [], 'subject': [], 'object': [], 'labels': []}
     for i, batch in enumerate(train_batch):
-        preds, _, loss = trainer.predict(batch)
+        preds, _, loss, batch_components = trainer.predict(batch)
         train_predictions += preds
         train_eval_loss += loss
+        sentence_enc, subject_enc, object_enc = batch_components
+
+        train_components['sentence'] += sentence_enc
+        train_components['subject'] += subject_enc
+        train_components['object'] += object_enc
+
     train_predictions = [id2label[p] for p in train_predictions]
     train_eval_loss = train_eval_loss / train_batch.num_examples * opt['batch_size']
+    train_components['labels'] = train_batch.gold()
 
     train_p, train_r, train_f1 = scorer.score(train_batch.gold(), train_predictions)
     print("epoch {}: train_loss = {:.6f}, train_eval_loss = {:.6f}, dev_f1 = {:.4f}".format(
@@ -230,12 +238,20 @@ for epoch in range(1, opt['num_epoch']+1):
     print("Evaluating on dev set...")
     dev_predictions = []
     dev_loss = 0
+    dev_components = {'sentence': [], 'subject': [], 'object': [], 'labels': []}
     for i, batch in enumerate(dev_batch):
-        preds, _, loss = trainer.predict(batch)
+        preds, _, loss, batch_components = trainer.predict(batch)
         dev_predictions += preds
         dev_loss += loss
+        sentence_enc, subject_enc, object_enc = batch_components
+
+        dev_components['sentence'] += sentence_enc
+        dev_components['subject'] += subject_enc
+        dev_components['object'] += object_enc
+
     dev_predictions = [id2label[p] for p in dev_predictions]
     dev_loss = dev_loss / dev_batch.num_examples * opt['batch_size']
+    dev_components['labels'] = dev_batch.gold()
 
     dev_p, dev_r, dev_f1 = scorer.score(dev_batch.gold(), dev_predictions)
     print("epoch {}: train_loss = {:.6f}, dev_loss = {:.6f}, dev_f1 = {:.4f}".format(epoch, train_loss, dev_loss, dev_f1))
@@ -245,10 +261,17 @@ for epoch in range(1, opt['num_epoch']+1):
 
      # eval on test
     test_predictions = []
+    test_components = {'sentence': [], 'subject': [], 'object': [], 'labels': []}
     for i, batch in enumerate(test_batch):
-        preds, _, loss = trainer.predict(batch)
+        preds, _, loss, batch_components = trainer.predict(batch)
         test_predictions += preds
+        sentence_enc, subject_enc, object_enc = batch_components
+        test_components['sentence'] += sentence_enc
+        test_components['subject'] += subject_enc
+        test_components['object'] += object_enc
+
     test_predictions = [id2label[p] for p in test_predictions]
+    test_components['labels'] = test_batch.gold()
 
     test_p, test_r, test_f1 = scorer.score(test_batch.gold(), test_predictions)
     test_metrics_at_current_dev = {'f1': test_f1, 'precision': test_p, 'recall': test_r}
@@ -274,6 +297,21 @@ for epoch in range(1, opt['num_epoch']+1):
         with open(test_confusion_save_file, 'wb') as handle:
             pickle.dump(test_confusion_matrix, handle)
 
+        component_save_dir = os.path.join(test_save_dir, 'components')
+        os.makedirs(component_save_dir)
+        dev_save_dir = os.path.join(component_save_dir, 'dev')
+        os.makedirs(dev_save_dir)
+        print(f'Saving Dev logits to: {dev_save_dir}')
+        for name, data in dev_components.items():
+            with open(os.path.join(dev_save_dir, name + '.pkl'), 'wb') as handle:
+                pickle.dump(data, handle)
+        test_save_dir = os.path.join(component_save_dir, 'test')
+        os.makedirs(test_save_dir)
+        print(f'Saving Test logits to: {test_save_dir}')
+        for name, data in test_components.items():
+            with open(os.path.join(test_save_dir, name + '.pkl'), 'wb') as handle:
+                pickle.dump(data, handle)
+
     print("Best Dev Metrics | F1: {} | Precision: {} | Recall: {}".format(
         best_dev_metrics['f1'], best_dev_metrics['precision'], best_dev_metrics['recall']
     ))
@@ -284,7 +322,7 @@ for epoch in range(1, opt['num_epoch']+1):
     helper.record_metrics(train_perf_save_file, train_p, train_r, train_f1)
     helper.record_metrics(dev_perf_save_file, dev_p, dev_r, dev_f1)
     helper.record_metrics(test_perf_save_file, test_p, test_r, test_f1)
-    
+
     # save
     model_file = model_save_dir + '/checkpoint_epoch_{}.pt'.format(epoch)
     trainer.save(model_file, epoch)

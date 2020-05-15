@@ -26,9 +26,9 @@ class GCNClassifier(nn.Module):
         return self.gcn_model.gcn.conv_l2()
 
     def forward(self, inputs):
-        outputs, pooling_output = self.gcn_model(inputs)
+        outputs, pooling_output, components = self.gcn_model(inputs)
         logits = self.classifier(outputs)
-        return logits, pooling_output
+        return logits, pooling_output, components
 
     def get_deprel_emb(self):
         return self.gcn_model.get_deprel_embedding()
@@ -145,7 +145,7 @@ class GCNRelationModel(nn.Module):
         obj_out = pool(tree_encodings, obj_mask, type=pool_type)
         outputs = torch.cat([h_out, subj_out, obj_out], dim=1)
         outputs = self.out_mlp(outputs)
-        return outputs, h_out
+        return outputs, h_out, (subj_out, obj_out)
 
 class TreeLSTMWrapper(nn.Module):
     """ A GCN/Contextualized GCN module operated on dependency graphs. """
