@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
-from torchnlp.nn import WeightDropLinear
+from torchnlp.nn import *
 
 
 # Copied from https://github.com/dasguptar/treelstm.pytorch/blob/master/treelstm/model.py
@@ -61,8 +61,12 @@ class BatchedChildSumTreeLSTM(nn.Module):
         self.x_dropout = x_dropout
         self.h_dropout = h_dropout
         self.x_iouf = nn.Linear(self.in_dim, 4 * self.mem_dim)
-        self.h_iou = WeightDropLinear(self.mem_dim, 3 * self.mem_dim, weight_dropout=self.h_dropout)
-        self.h_f = WeightDropLinear(self.mem_dim, self.mem_dim, weight_dropout=self.h_dropout)
+        self.h_iou = WeightDrop(nn.Linear(self.mem_dim, 3 * self.mem_dim),
+                                ['weight'],
+                                dropout=self.h_dropout)
+        self.h_f = WeightDrop(nn.Linear(self.mem_dim, self.mem_dim),
+                              ['weight'],
+                              dropout=self.h_dropout)
 
     def step(self, inputs, child_hidden, child_cell, child_mask):
         """

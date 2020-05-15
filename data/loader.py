@@ -42,6 +42,7 @@ class DataLoader(object):
     def preprocess(self, data, vocab, opt):
         """ Preprocess the data and convert to ids. """
         processed = []
+        # data = data[:100]
         for d in data:
             tokens = list(d['token'])
             if opt['lower']:
