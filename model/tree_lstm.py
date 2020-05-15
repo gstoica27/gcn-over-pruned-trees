@@ -62,11 +62,11 @@ class BatchedChildSumTreeLSTM(nn.Module):
         self.h_dropout = h_dropout
         self.x_iouf = nn.Linear(self.in_dim, 4 * self.mem_dim)
         self.h_iou = nn.Linear(self.mem_dim, 3 * self.mem_dim)
-        self.h_iou_dropped = WeightDropLinear(self.h_iou,
+        self.h_iou_dropped = WeightDrop(self.h_iou,
                                 ['weight'],
                                 dropout=self.h_dropout)
         self.h_f = nn.Linear(self.mem_dim, self.mem_dim)
-        self.h_f_dropped = WeightDropLinear(self.h_f,
+        self.h_f_dropped = WeightDrop(self.h_f,
                                               ['weight'],
                                               dropout=self.h_dropout)
 
