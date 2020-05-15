@@ -93,7 +93,10 @@ parser.add_argument('--model_file', type=str, help='Filename of the pretrained m
 # parser.add_argument('--adj_type', type=str, default='regular')
 parser.add_argument('--deprel_emb_dim',type=int, default=200)
 parser.add_argument('--deprel_dropout', type=float, default=.5)
+
 parser.add_argument('--num_tree_lstms', type=int, default=1)
+parser.add_argument('--tree_x_dropout', type=float, default=.0)
+parser.add_argument('--tree_h_dropout', type=float, default=.0)
 
 args = parser.parse_args()
 

@@ -11,6 +11,7 @@ import numpy as np
 from model.tree import Tree, head_to_tree, tree_to_adj
 from model.tree_lstm import BatchedChildSumTreeLSTM
 from utils import constant, torch_utils
+from model.dropouts import EmbeddingDropout
 
 class GCNClassifier(nn.Module):
     """ A wrapper classifier for GCNRelationModel. """
@@ -154,6 +155,7 @@ class TreeLSTMWrapper(nn.Module):
 
         # self.emb, self.pos_emb, self.ner_emb, self.deprel_emb = embeddings
         self.emb, self.pos_emb, self.ner_emb = embeddings
+        self.emb_dropout = EmbeddingDropout(opt['input_dropout'])
         # rnn layer
         if self.opt.get('rnn', False):
             input_size = self.in_dim
@@ -169,7 +171,9 @@ class TreeLSTMWrapper(nn.Module):
             input_dim = self.in_dim if layer == 0 else self.mem_dim
             self.tree_lstms.append(BatchedChildSumTreeLSTM(in_dim=input_dim,
                                                            mem_dim=self.mem_dim,
-                                                           on_cuda=opt['cuda']))
+                                                           on_cuda=opt['cuda'],
+                                                           x_dropout=opt['tree_x_dropout'],
+                                                           h_dropout=opt['tree_h_dropout']))
 
     def conv_l2(self):
         conv_weights = []
@@ -192,7 +196,8 @@ class TreeLSTMWrapper(nn.Module):
 
     def forward(self, trees, inputs, max_depth, max_bottom_offset):
         words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
-        word_embs = self.emb(words)
+        word_embs = self.emb_dropout(self.emb, words)
+        # word_embs = self.emb(words)
         embs = [word_embs]
         if self.opt['pos_dim'] > 0:
             embs += [self.pos_emb(pos)]

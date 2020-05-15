@@ -3,20 +3,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
-########################################################################################################################
-#             Code Copied from https://github.com/dasguptar/treelstm.pytorch/blob/master/treelstm/model.py             #
-########################################################################################################################
+from torchnlp.nn import WeightDropLinear
 
-# module for childsumtreelstm
+
+# Copied from https://github.com/dasguptar/treelstm.pytorch/blob/master/treelstm/model.py
 class ChildSumTreeLSTM(nn.Module):
-    def __init__(self, in_dim, mem_dim):
+    def __init__(self, in_dim, mem_dim, x_dropout=0.0, h_dropout=0.0):
         super(ChildSumTreeLSTM, self).__init__()
         self.in_dim = in_dim
         self.mem_dim = mem_dim
+        self.x_dropout = x_dropout
+        self.h_dropout = h_dropout
         self.ioux = nn.Linear(self.in_dim, 3 * self.mem_dim)
-        self.iouh = nn.Linear(self.mem_dim, 3 * self.mem_dim)
+        self.iouh = WeightDropLinear(self.mem_dim, 3 * self.mem_dim, weight_dropout=self.h_dropout)
         self.fx = nn.Linear(self.in_dim, self.mem_dim)
-        self.fh = nn.Linear(self.mem_dim, self.mem_dim)
+        self.fh = WeightDropLinear(self.mem_dim, self.mem_dim, weight_dropout=self.h_dropout)
 
     def node_forward(self, inputs, child_c, child_h):
         child_h_sum = torch.sum(child_h, dim=0, keepdim=True)
@@ -49,15 +50,19 @@ class ChildSumTreeLSTM(nn.Module):
         tree.state = self.node_forward(inputs[tree.idx], child_c, child_h)
         return tree.state
 
+# Batched Version for Child-Sum Tree-LSTM. Model logic details are described here:
+# https://www.overleaf.com/project/5ebc5ed89e56a600019484d2
 class BatchedChildSumTreeLSTM(nn.Module):
-    def __init__(self, in_dim, mem_dim, on_cuda):
+    def __init__(self, in_dim, mem_dim, on_cuda, x_dropout=0.0, h_dropout=0.0):
         super(BatchedChildSumTreeLSTM, self).__init__()
         self.in_dim = in_dim
         self.mem_dim = mem_dim
         self.on_cuda = on_cuda
+        self.x_dropout = x_dropout
+        self.h_dropout = h_dropout
         self.x_iouf = nn.Linear(self.in_dim, 4 * self.mem_dim)
-        self.h_iou = nn.Linear(self.mem_dim, 3 * self.mem_dim)
-        self.h_f = nn.Linear(self.mem_dim, self.mem_dim)
+        self.h_iou = WeightDropLinear(self.mem_dim, 3 * self.mem_dim, weight_dropout=self.h_dropout)
+        self.h_f = WeightDropLinear(self.mem_dim, self.mem_dim, weight_dropout=self.h_dropout)
 
     def step(self, inputs, child_hidden, child_cell, child_mask):
         """
