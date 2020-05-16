@@ -157,15 +157,15 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
 
         root = nodes[highest_node]
 
-    # subject_root = find_tree_component(tree=root, component_idxs=set(subj_pos))
-    # object_root = find_tree_component(tree=root, component_idxs=set(obj_pos))
+    subject_root = find_tree_component(tree=root, component_idxs=set(subj_pos))
+    object_root = find_tree_component(tree=root, component_idxs=set(obj_pos))
     tree_depth = find_tree_depth(root)
     assert root is not None
     assert tree_depth > 1
-    # assert subject_root is not None
-    # assert object_root is not None
+    assert subject_root is not None
+    assert object_root is not None
     root.depth = tree_depth
-    return root
+    return (root, subject_root, object_root)
 
 def find_tree_component(tree, component_idxs):
     queue = [tree]

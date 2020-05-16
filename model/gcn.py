@@ -57,7 +57,11 @@ class GCNRelationModel(nn.Module):
         self.tree_lstm_wrapper = TreeLSTMWrapper(opt, embeddings, opt['hidden_dim'], opt['num_layers'])
 
         # output mlp layers
-        in_dim = opt['hidden_dim']*3
+        if opt ['node_pooling']:
+            multiplier = 3
+        else:
+            multiplier = 2
+        in_dim = opt['hidden_dim']* multiplier
         layers = [nn.Linear(in_dim, opt['hidden_dim']), nn.ReLU()]
         for _ in range(self.opt['mlp_layers']-1):
             layers += [nn.Linear(opt['hidden_dim'], opt['hidden_dim']), nn.ReLU()]
@@ -110,6 +114,7 @@ class GCNRelationModel(nn.Module):
             head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
             deprel = deprel.cpu().numpy()
             trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i], deprel[i]) for i in range(len(l))]
+            trees, subject_trees, object_trees = zip(*trees)
             # Maximum tree depth in batch. Used to know how many LSTM steps are needed
             max_depth = max(list(map(lambda node:node.depth, trees)))
             adj = [tree_to_adj(maxlen, tree,
@@ -125,27 +130,56 @@ class GCNRelationModel(nn.Module):
             adj = adj[:, :, :max_col_offset]
 
             adj = torch.from_numpy(adj) # [B,T1,T2]
-            return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj), max_depth, max_bottom_offset
-            # return trees
+            adj =  Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
+            component_trees = (trees, subject_trees, object_trees)
+            return adj, max_depth, max_bottom_offset, component_trees
 
-        tree_adj, max_depth, max_bottom_offset = inputs_to_tree_reps(
+        tree_adj, max_depth, max_bottom_offset, component_trees = inputs_to_tree_reps(
             head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data
         )
         tree_encodings, pool_mask = self.tree_lstm_wrapper(tree_adj, inputs, max_depth, max_bottom_offset)
         
         # pooling
-        subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
-        # subj_mask = subj_pos.eq(0).unsqueeze(2)
-        # obj_mask = obj_pos.eq(0).unsqueeze(2)
-        # pool_mask = torch.logical_xor(pool_mask.eq(0), (subj_mask + obj_mask))
-        # subj_mask, obj_mask, pool_mask = subj_mask.eq(0),  obj_mask.eq(0), pool_mask.eq(0)
-        pool_type = self.opt['pooling']
-        h_out = pool(tree_encodings, pool_mask, type=pool_type)
-        subj_out = pool(tree_encodings, subj_mask, type=pool_type)
-        obj_out = pool(tree_encodings, obj_mask, type=pool_type)
-        outputs = torch.cat([h_out, subj_out, obj_out], dim=1)
+        if self.opt.get('node_pooling', False):
+            batch_size = words.shape[0]
+            sentence_roots, subject_roots, object_roots = component_trees
+            root_mask = self.tree_to_mask(sentence_roots, batch_size=batch_size, token_len=maxlen)
+            subject_mask = self.tree_to_mask(subject_roots, batch_size=batch_size, token_len=maxlen)
+            object_mask = self.tree_to_mask(object_roots, batch_size=batch_size, token_len=maxlen)
+            # Extract respective root indices
+            sentence_rep = (tree_encodings * root_mask).sum(1)
+            subject_rep = (tree_encodings * subject_mask).sum(1)
+            object_rep = (tree_encodings * object_mask).sum(1)
+            outputs = torch.cat([sentence_rep, subject_rep, object_rep], dim=1)
+
+        else:
+            subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
+            # subj_mask = subj_pos.eq(0).unsqueeze(2)
+            # obj_mask = obj_pos.eq(0).unsqueeze(2)
+            # pool_mask = torch.logical_xor(pool_mask.eq(0), (subj_mask + obj_mask))
+            # subj_mask, obj_mask, pool_mask = subj_mask.eq(0),  obj_mask.eq(0), pool_mask.eq(0)
+            pool_type = self.opt['pooling']
+            sentence_rep = pool(tree_encodings, pool_mask, type=pool_type)
+            subject_rep = pool(tree_encodings, subj_mask, type=pool_type)
+            object_rep = pool(tree_encodings, obj_mask, type=pool_type)
+            # outputs = torch.cat([sentence_rep, subject_rep, object_rep], dim=1)
+            outputs = torch.cat([subject_rep, object_rep], dim=1)
         outputs = self.out_mlp(outputs)
-        return outputs, h_out, (subj_out, obj_out)
+        return outputs, sentence_rep, (subject_rep, object_rep)
+
+    def tree_to_mask(self, trees, batch_size, token_len):
+        token_indices = np.array([tree.idx for tree in trees])
+        batch_indices = np.arange(batch_size)
+        # indices = list(zip(batch_indices, token_indices))
+        # [B,T]
+        mask = torch.zeros((batch_size, token_len), dtype=torch.float32)
+        # Replace tree index elements in each batch sample with 1
+        mask[batch_indices, token_indices] = torch.ones_like(torch.from_numpy(batch_indices), dtype=torch.float32)
+        # Expand dims for masking
+        mask.unsqueeze_(-1)
+        if self.opt['cuda']:
+            mask = mask.cuda()
+        return mask
 
 class TreeLSTMWrapper(nn.Module):
     """ A GCN/Contextualized GCN module operated on dependency graphs. """

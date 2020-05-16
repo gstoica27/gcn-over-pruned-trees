@@ -21,6 +21,11 @@ from data.loader import DataLoader
 from model.trainer import GCNTrainer
 from utils import torch_utils, scorer, constant, helper
 from utils.vocab import Vocab
+
+
+def str2bool(v):
+    return v.lower() in ('true')
+
 cwd = os.getcwd()
 on_server = 'Desktop' not in cwd
 # Local paths
@@ -97,6 +102,7 @@ parser.add_argument('--deprel_dropout', type=float, default=.5)
 parser.add_argument('--num_tree_lstms', type=int, default=1)
 parser.add_argument('--tree_x_dropout', type=float, default=.0)
 parser.add_argument('--tree_h_dropout', type=float, default=.0)
+parser.add_argument('--node_pooling', type=str2bool, default=False)
 
 args = parser.parse_args()
 
