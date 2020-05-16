@@ -163,9 +163,8 @@ class BatchedChildSumTreeLSTM(nn.Module):
             flat_hidden_state = hidden_state.reshape((-1, hidden_state.shape[-1]))
             flat_cell_states = cell_state.reshape((-1, hidden_state.shape[-1]))
             # [BxT1,H] ([B,T1,T2]) -> [B,T1,T2,H]
-            child_hidden_states = F.embedding(trees.type(torch.long), flat_hidden_state, 0, 2, False,
-                                              False)  # [B,T1,T2,H]
-            child_cell_states = F.embedding(trees.type(torch.long), flat_cell_states, 0, 2, False, False)
+            child_hidden_states = F.embedding(trees.type(torch.long), flat_hidden_state, padding_idx=0, max_norm=2, sparse=True)  # [B,T1,T2,H]
+            child_cell_states = F.embedding(trees.type(torch.long), flat_cell_states, padding_idx=0, max_norm=2, sparse=True)
 
             new_hidden_states, new_cell_states = self.step(
                 dropped_encodings,  # [:,:max_bottom_offset,:],
