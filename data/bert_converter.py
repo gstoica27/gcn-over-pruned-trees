@@ -10,7 +10,7 @@ def load_datasets(file_dir, file_names):
         file_path = os.path.join(file_dir, file_name)
         with open(file_path, 'rb') as handle:
             partition_data = json.load(handle)
-        data += partition_data
+        data += partition_data[:1]
     return data
 
 def replace_tokens(data):
@@ -53,4 +53,5 @@ file_names = ['train.json', 'dev.json', 'test.json']
 data = load_datasets(file_dir, file_names)
 data = replace_tokens(data)
 bert_save_dir = '/usr0/home/gis/data/bert_saves'
+os.makedirs(bert_save_dir, exist_ok=True)
 extract_embeddings(data, bert_save_dir)
