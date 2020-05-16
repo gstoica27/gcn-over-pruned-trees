@@ -34,7 +34,7 @@ class EmbeddingDropout(nn.Module):
         dropout_mask[:, unique_values] = unique_mask  # [B, V]
         if input_values.is_cuda:
             dropout_mask = dropout_mask.cuda()
-        input_embs = F.embedding(input_values.weight, emb_matrix, padding_idx=0, sparse=True)                 # [B, L, E]
+        input_embs = F.embedding(input_values, emb_matrix.weight, padding_idx=0, sparse=True)                 # [B, L, E]
         input_embs_mask = torch.gather(dropout_mask, 1, input_values, sparse_grad=True).unsqueeze(-1)  # [B, L, 1]
         return input_embs * input_embs_mask / (1 - self.dropout)
 
