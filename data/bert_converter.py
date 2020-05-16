@@ -37,7 +37,7 @@ def extract_embeddings(data, save_dir):
     for d in data:
         tokens = d['token']
         token_embeddings = bc.encode(tokens)
-        for idx, token in tokens:
+        for idx, token in enumerate(tokens):
             if token not in vocab2id:
                 vocab2id[token] = len(vocab2id)
                 token_embedding = token_embeddings[idx]
