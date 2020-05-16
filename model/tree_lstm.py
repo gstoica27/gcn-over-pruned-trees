@@ -132,6 +132,7 @@ class BatchedChildSumTreeLSTM(nn.Module):
         u_j = torch.tanh(x_u + h_u)
 
         h_f = self.h_f(child_hidden)  # [B,T1,T2,H]
+        # TODO: This is Bug!! It should be indexed along the 1st dimension to get correct token values!
         f_jk = torch.sigmoid(x_f[:, :num_children, :].unsqueeze(1) + h_f)        # [B,T1,T2,H]
         # [B,T1,T2,H]x[B,T1,T2,H]x[B,T1,T2,1] -> [B,T1,H]
         c_j_rhs = (f_jk * child_cell * child_mask).sum(2)
@@ -163,8 +164,8 @@ class BatchedChildSumTreeLSTM(nn.Module):
             flat_hidden_state = hidden_state.reshape((-1, hidden_state.shape[-1]))
             flat_cell_states = cell_state.reshape((-1, hidden_state.shape[-1]))
             # [BxT1,H] ([B,T1,T2]) -> [B,T1,T2,H]
-            child_hidden_states = F.embedding(trees.type(torch.long), flat_hidden_state, padding_idx=0, max_norm=2, sparse=True)  # [B,T1,T2,H]
-            child_cell_states = F.embedding(trees.type(torch.long), flat_cell_states, padding_idx=0, max_norm=2, sparse=True)
+            child_hidden_states = F.embedding(trees, flat_hidden_state, padding_idx=0, max_norm=2, sparse=False)  # [B,T1,T2,H]
+            child_cell_states = F.embedding(trees, flat_cell_states, padding_idx=0, max_norm=2, sparse=False)
 
             new_hidden_states, new_cell_states = self.step(
                 dropped_encodings,  # [:,:max_bottom_offset,:],

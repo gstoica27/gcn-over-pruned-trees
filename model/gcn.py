@@ -133,8 +133,9 @@ class GCNRelationModel(nn.Module):
             max_col_offset = max(col_right_offsets)
             adj = adj[:, :, :max_col_offset]
 
-            adj = torch.from_numpy(adj) # [B,T1,T2]
-            adj =  Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
+            adj = torch.from_numpy(adj).type(torch.long) # [B,T1,T2]
+            adj.requires_grad_(False)
+            adj = Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
             component_trees = (trees, subject_trees, object_trees)
             return adj, max_depth, max_bottom_offset, component_trees
 
