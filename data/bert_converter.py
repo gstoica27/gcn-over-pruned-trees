@@ -10,7 +10,7 @@ def load_datasets(file_dir, file_names):
         file_path = os.path.join(file_dir, file_name)
         with open(file_path, 'rb') as handle:
             partition_data = json.load(handle)
-        data += partition_data[:1]
+        data += partition_data
     return data
 
 def replace_tokens(data):
