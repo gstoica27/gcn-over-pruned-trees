@@ -29,13 +29,13 @@ class EmbeddingDropout(nn.Module):
         if not self.training or self.dropout <= 0.:
             return emb_matrix(input_values)
         unique_values = torch.unique(input_values)
-        emb_mask = torch.zeros((emb_matrix.weight.shape[0], 1), dtype=torch.float32)
-        unique_mask = torch.empty(unique_values.shape[0], 1,  requires_grad=False).bernoulli_(1 - self.dropout)
-        emb_mask[unique_values, :] = unique_mask
+        dropout_mask = torch.zeros((input_values.shape[0], emb_matrix.weight.shape[0]), dtype=torch.float32)
+        unique_mask = torch.empty(input_values.shape[0], unique_values.shape[0],  requires_grad=False).bernoulli_(1 - self.dropout)
+        dropout_mask[:, unique_values] = unique_mask  # [B, V]
         if input_values.is_cuda:
-            emb_mask = emb_mask.cuda()
-        masked_emb_matrix = emb_matrix.weight * emb_mask
-        input_embs = F.embedding(input_values, masked_emb_matrix, 0, 2, False, False) / (1 - self.dropout)
-        return input_embs
+            dropout_mask = dropout_mask.cuda()
+        input_embs = F.embedding(input_values, emb_matrix, padding_idx=0, sparse=True)                 # [B, L, E]
+        input_embs_mask = torch.gather(dropout_mask, 1, input_values, sparse_grad=True).unsqueeze(-1)  # [B, L, 1]
+        return input_embs * input_embs_mask / (1 - self.dropout)
 
 

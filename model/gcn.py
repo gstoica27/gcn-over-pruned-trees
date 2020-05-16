@@ -111,9 +111,13 @@ class GCNRelationModel(nn.Module):
         maxlen = max(l)
 
         def inputs_to_tree_reps(head, words, l, prune, subj_pos, obj_pos, deprel):
-            head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
+            head, words, subj_pos, obj_pos = head.cpu().numpy(), \
+                                             words.cpu().numpy(), \
+                                             subj_pos.cpu().numpy(), \
+                                             obj_pos.cpu().numpy()
             deprel = deprel.cpu().numpy()
-            trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i], deprel[i]) for i in range(len(l))]
+            trees = [head_to_tree(head[i], words[i], l[i], prune,
+                                  subj_pos[i], obj_pos[i], deprel[i]) for i in range(len(l))]
             trees, subject_trees, object_trees = zip(*trees)
             # Maximum tree depth in batch. Used to know how many LSTM steps are needed
             max_depth = max(list(map(lambda node:node.depth, trees)))
