@@ -2,6 +2,7 @@ import os
 import json
 from bert_serving.client import BertClient
 import pickle
+from time import time
 
 
 def load_datasets(file_dir, file_names):
@@ -34,7 +35,10 @@ def extract_embeddings(data, save_dir):
     bc = BertClient()
     vocab2id = {}
     embeddings = []
-    for d in data:
+    start_time = time()
+    gap = int(len(data) / 100)
+    percent_done = -1
+    for idx, d in enumerate(data):
         tokens = d['token']
         token_embeddings = bc.encode(tokens)
         for idx, token in enumerate(tokens):
@@ -42,6 +46,11 @@ def extract_embeddings(data, save_dir):
                 vocab2id[token] = len(vocab2id)
                 token_embedding = token_embeddings[idx]
                 embeddings.append(token_embedding)
+        if idx % gap == 0:
+            percent_done += 1
+            gap_time = time()
+            print(f'Completed {percent_done * 100}%. Time elapsed: {gap_time - start_time}')
+
 
     vocab_path = os.path.join(save_dir, 'vocab.pkl')
     embeddings_path = os.path.join(save_dir, 'embeddings.pkl')
