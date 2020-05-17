@@ -103,7 +103,8 @@ class GCNRelationModel(nn.Module):
         adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data)
         print('adj: {}'.format(adj.shape))
         h, pool_mask = self.gcn(adj, inputs)
-        
+        if h.shape[1] != pool_mask.shape[1]:
+            pool_mask = pool_mask[:, :h.shape[1], :]
         # pooling
         subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
         # subj_mask = subj_pos.eq(0).unsqueeze(2)
