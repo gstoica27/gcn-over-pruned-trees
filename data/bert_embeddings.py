@@ -54,11 +54,13 @@ def batch_data(data, batch_size=100):
 
 
 def extract_embeddings(batches):
-    print('Extracting Embeddings...')
+    print('Extracting Embeddings... | Batch len: {}'.format(len(batches)))
+
     bert_client = BertClient()
     id2sentence_embeddings = {}
     for batch in batches:
         ids, sentences = zip(*batch)
+        sentences = list(sentences)
         batch_embeddings = bert_client.encode(sentences, is_tokenized=True)[:, 1:-1, :]
         for sample_idx, sample_id in enumerate(ids):
             sample_embeddings = batch_embeddings[sample_idx]
