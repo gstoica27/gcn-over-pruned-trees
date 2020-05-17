@@ -132,11 +132,11 @@ class DataLoader(object):
     def pad_tokens(self, embeddings):
         max_len = max([token_embs.shape[0] for token_embs in embeddings])
         embedding_size = embeddings[0].shape[-1]
-        for idx in enumerate(embeddings):
-            print('max_len: {} | token lengths: {}'.format(max_len, embeddings[idx].shape[0]))
-            pad_amount = max_len - embeddings[idx].shape[0]
+        for idx, sample_embs in enumerate(embeddings):
+            # print('max_len: {} | token lengths: {}'.format(max_len, embeddings[idx].shape[0]))
+            pad_amount = max_len - sample_embs.shape[0]
             padding = np.zeros((pad_amount, embedding_size), dtype=np.float32)
-            embeddings[idx] = np.concatenate([embeddings[idx], padding], axis=0)
+            embeddings[idx] = np.concatenate([sample_embs, padding], axis=0)
         return np.array(embeddings)
 
 
