@@ -268,6 +268,7 @@ class GCN(nn.Module):
 
 def pool(h, mask, type='max'):
     if type == 'max':
+        print('h: {} | mask: {}'.format(h.shape, mask.shape))
         h = h.masked_fill(mask, -constant.INFINITY_NUMBER)
         return torch.max(h, 1)[0]
     elif type == 'avg':
