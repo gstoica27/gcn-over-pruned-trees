@@ -23,6 +23,11 @@ from utils import torch_utils, scorer, constant, helper
 from utils.vocab import Vocab
 cwd = os.getcwd()
 on_server = 'Desktop' not in cwd
+
+
+def str2bool(v):
+    return v.lower() in ('true')
+
 # Local paths
 local_data_dir = '/Volumes/External HDD/dataset/tacred/data/json'
 local_vocab_dir = '/Volumes/External HDD/dataset/tacred/data/vocab'
@@ -94,6 +99,8 @@ parser.add_argument('--adj_type', type=str, default='regular')
 parser.add_argument('--deprel_emb_dim',type=int, default=200)
 parser.add_argument('--deprel_dropout', type=float, default=.5)
 
+parser.add_argument('--use_bert_embeddings', type=str2bool, default=False)
+
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -119,11 +126,14 @@ emb_matrix = np.load(emb_file)
 assert emb_matrix.shape[0] == vocab.size
 assert emb_matrix.shape[1] == opt['emb_dim']
 
+# Change embedding size for BERT
+if opt['use_bert_embeddings']:
+    opt['emb_dim'] = 1024
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt, vocab, evaluation=False)
-dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt, vocab, evaluation=True)
-test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt, vocab, evaluation=True)
+train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt, vocab, evaluation=False, use_bert=opt['use_bert_embeddings'])
+dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt, vocab, evaluation=True, use_bert=opt['use_bert_embeddings'])
+test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt, vocab, evaluation=True, use_bert=opt['use_bert_embeddings'])
 
 model_id = opt['id'] if len(opt['id']) > 1 else '0' + opt['id']
 model_save_dir = opt['model_save_dir'] + '/' + model_id

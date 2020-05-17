@@ -180,7 +180,10 @@ class GCN(nn.Module):
 
     def forward(self, adj, inputs):
         words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
-        word_embs = self.emb(words)
+        if len(words.shape) > 2:
+            word_embs = words
+        else:
+            word_embs = self.emb(words)
         embs = [word_embs]
         if self.opt['pos_dim'] > 0:
             embs += [self.pos_emb(pos)]

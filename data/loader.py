@@ -8,17 +8,21 @@ import torch
 import numpy as np
 
 from utils import constant, helper, vocab
+from bert_serving.client import BertClient
 
 class DataLoader(object):
     """
     Load data from json files, preprocess and prepare batches.
     """
-    def __init__(self, filename, batch_size, opt, vocab, evaluation=False):
+    def __init__(self, filename, batch_size, opt, vocab, evaluation=False, use_bert=False):
         self.batch_size = batch_size
         self.opt = opt
         self.vocab = vocab
         self.eval = evaluation
         self.label2id = constant.LABEL_TO_ID
+        self.use_bert = use_bert
+        if self.use_bert:
+            self.bert_client = BertClient()
 
         with open(filename) as infile:
             data = json.load(infile)
@@ -51,7 +55,9 @@ class DataLoader(object):
             os, oe = d['obj_start'], d['obj_end']
             tokens[ss:se+1] = ['SUBJ-'+d['subj_type']] * (se-ss+1)
             tokens[os:oe+1] = ['OBJ-'+d['obj_type']] * (oe-os+1)
-            tokens = map_to_ids(tokens, vocab.word2id)
+            if not self.use_bert:
+                tokens = map_to_ids(tokens, vocab.word2id)
+
             pos = map_to_ids(d['stanford_pos'], constant.POS_TO_ID)
             ner = map_to_ids(d['stanford_ner'], constant.NER_TO_ID)
             deprel = map_to_ids(d['stanford_deprel'], constant.DEPREL_TO_ID)
@@ -90,11 +96,19 @@ class DataLoader(object):
 
         # word dropout
         if not self.eval:
-            words = [word_dropout(sent, self.opt['word_dropout']) for sent in batch[0]]
+            words = [word_dropout(sent, self.opt['word_dropout'], self.use_bert) for sent in batch[0]]
         else:
             words = batch[0]
 
         # convert to tensors
+        if self.use_bert:
+            # Extract BERT embeddings. Remove first index b/c it's [CLS], and last index as its [SEP].
+            # Note, we assume that the BERT client masks out [CLS] and [SEP], which is why we are able
+            # to remove the last token element (it is equivalent to an additional PAD vector, and each
+            # sentence is guaranteed to have at least one of these. This is because very sentence has
+            # [SEP] which in this case is [PAD].
+            words = self.bert_client.encode(words, is_tokenized=True)[:, 1:-1, :]
+            words = torch.from_numpy(words)
         words = get_long_tensor(words, batch_size)
         masks = torch.eq(words, 0)
         pos = get_long_tensor(batch[1], batch_size)
@@ -140,8 +154,12 @@ def sort_all(batch, lens):
     sorted_all = [list(t) for t in zip(*sorted(zip(*unsorted_all), reverse=True))]
     return sorted_all[2:], sorted_all[1]
 
-def word_dropout(tokens, dropout):
+def word_dropout(tokens, dropout, use_bert):
     """ Randomly dropout tokens (IDs) and replace them with <UNK> tokens. """
-    return [constant.UNK_ID if x != constant.UNK_ID and np.random.random() < dropout \
+    if not use_bert:
+        return [constant.UNK_ID if x != constant.UNK_ID and np.random.random() < dropout \
             else x for x in tokens]
+    else:
+        return [constant.UNK_TOKEN if x != constant.UNK_ID and np.random.random() < dropout \
+                    else x for x in tokens]
 
