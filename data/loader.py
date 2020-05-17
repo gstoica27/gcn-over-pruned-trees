@@ -132,6 +132,7 @@ class DataLoader(object):
     def pad_tokens(self, embeddings):
         print(embeddings[0].shape)
         print(len(embeddings))
+        print(np.array(embeddings).shape)
         batch_size, max_len, embedding_size = np.array(embeddings).shape
         for idx in enumerate(embeddings):
             pad_amount = max_len - embeddings[idx].shape[0]
