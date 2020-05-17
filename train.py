@@ -134,16 +134,19 @@ else:
     assert emb_matrix.shape[1] == opt['emb_dim']
 
 if opt['use_bert_embeddings']:
+    print('Loading BERT Embeddings...')
     embeddings_file = '/usr0/home/gis/data/bert_saves/id2embeddings.pkl'
+    id2embeddings = pickle.load(open(embeddings_file, 'rb'))
+    print('Embeddings Loaded')
 else:
-    embeddings_file = None
+    id2embeddings = None
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
 train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt,
-                         vocab, evaluation=False, bert_embeddings=embeddings_file)
+                         vocab, evaluation=False, bert_embeddings=id2embeddings)
 dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt,
-                       vocab, evaluation=True, bert_embeddings=embeddings_file)
+                       vocab, evaluation=True, bert_embeddings=id2embeddings)
 test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt,
-                        vocab, evaluation=True, bert_embeddings=embeddings_file)
+                        vocab, evaluation=True, bert_embeddings=id2embeddings)
 
 model_id = opt['id'] if len(opt['id']) > 1 else '0' + opt['id']
 model_save_dir = opt['model_save_dir'] + '/' + model_id

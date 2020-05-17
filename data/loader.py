@@ -20,12 +20,7 @@ class DataLoader(object):
         self.vocab = vocab
         self.eval = evaluation
         self.label2id = constant.LABEL_TO_ID
-
-        if bert_embeddings is not None:
-            print('Loading BERT Embeddings...')
-            self.id2embeddings = pickle.load(open(bert_embeddings, 'rb'))
-        else:
-            self.id2embeddings = None
+        self.id2embeddings = bert_embeddings
 
         with open(filename) as infile:
             data = json.load(infile)
