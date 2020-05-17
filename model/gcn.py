@@ -84,7 +84,7 @@ class GCNRelationModel(nn.Module):
 
     def forward(self, inputs):
         words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
-        print('words: {} | masks: {} | pos: {} | ner: {}'.format(words.shape, masks.shape, pos.shape, ner.shape))
+        print('words: {} | masks: {} | pos: {} | ner: {} | head: {}'.format(words.shape, masks.shape, pos.shape, ner.shape, head.shape))
         l = (masks.data.cpu().numpy() == 0).astype(np.int64).sum(1)
         maxlen = max(l)
 
