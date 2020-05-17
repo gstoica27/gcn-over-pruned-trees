@@ -8,17 +8,20 @@ import torch
 import numpy as np
 
 from utils import constant, helper, vocab
+import pickle
 
 class DataLoader(object):
     """
     Load data from json files, preprocess and prepare batches.
     """
-    def __init__(self, filename, batch_size, opt, vocab, evaluation=False):
+    def __init__(self, filename, batch_size, opt, vocab, evaluation=False, bert_embeddings=None):
         self.batch_size = batch_size
         self.opt = opt
         self.vocab = vocab
         self.eval = evaluation
         self.label2id = constant.LABEL_TO_ID
+        if bert_embeddings is not None:
+            self.id2bert_embs = pickle.load(open(bert_embeddings, 'rb'))
 
         with open(filename) as infile:
             data = json.load(infile)
