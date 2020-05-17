@@ -87,8 +87,8 @@ class GCNRelationModel(nn.Module):
         l = (masks.data.cpu().numpy() == 0).astype(np.int64).sum(1)
         maxlen = max(l)
 
-        print('words: {} | masks: {} | pos: {} | ner: {} | head: {} | maxlen: {}'.format(
-            words.shape, masks.shape, pos.shape, ner.shape, head.shape, maxlen))
+        # print('words: {} | masks: {} | pos: {} | ner: {} | head: {} | maxlen: {}'.format(
+        #     words.shape, masks.shape, pos.shape, ner.shape, head.shape, maxlen))
 
         def inputs_to_tree_reps(head, words, l, prune, subj_pos, obj_pos, deprel):
             head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
@@ -101,7 +101,7 @@ class GCNRelationModel(nn.Module):
             return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
 
         adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data)
-        print('adj: {}'.format(adj.shape))
+        # print('adj: {}'.format(adj.shape))
         h, pool_mask = self.gcn(adj, inputs)
         # pooling
         subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
