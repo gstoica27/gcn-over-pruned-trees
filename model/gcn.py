@@ -99,6 +99,7 @@ class GCNRelationModel(nn.Module):
             return Variable(adj.cuda()) if self.opt['cuda'] else Variable(adj)
 
         adj = inputs_to_tree_reps(head.data, words.data, l, self.opt['prune_k'], subj_pos.data, obj_pos.data, deprel.data)
+        print('adj: {}'.format(adj.shape))
         h, pool_mask = self.gcn(adj, inputs)
         
         # pooling
