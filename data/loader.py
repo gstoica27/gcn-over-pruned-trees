@@ -130,10 +130,8 @@ class DataLoader(object):
             yield self.__getitem__(i)
 
     def pad_tokens(self, embeddings):
-        print(embeddings[0].shape)
-        print(len(embeddings))
-        print(np.array(embeddings).shape)
-        batch_size, max_len, embedding_size = np.array(embeddings).shape
+        max_len = max([token_embs.shape[0] for token_embs in embeddings])
+        embedding_size = embeddings[0].shape[-1]
         for idx in enumerate(embeddings):
             pad_amount = max_len - embeddings[idx].shape[0]
             padding = np.zeros((pad_amount, embedding_size), dtype=np.float32)
