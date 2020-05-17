@@ -54,6 +54,7 @@ def batch_data(data, batch_size=100):
 
 
 def extract_embeddings(batches):
+    print('Extracting Embeddings...')
     bert_client = BertClient()
     id2sentence_embeddings = {}
     for batch in batches:
