@@ -130,12 +130,12 @@ class DataLoader(object):
             yield self.__getitem__(i)
 
     def pad_tokens(self, embeddings):
-        max_len = embeddings.shape[-1]
+        batch_size, max_len, embedding_size = np.array(embeddings).shape
         for idx in enumerate(embeddings):
             pad_amount = max_len - embeddings[idx].shape[0]
-            padding = np.zeros((pad_amount, embeddings.shape[-1]), dtype=np.float32)
+            padding = np.zeros((pad_amount, embedding_size), dtype=np.float32)
             embeddings[idx] = np.concatenate([embeddings[idx], padding], axis=0)
-        return embeddings
+        return np.array(embeddings)
 
 
 def map_to_ids(tokens, vocab):
