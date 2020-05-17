@@ -124,9 +124,8 @@ class DataLoader(object):
 
         rels = torch.LongTensor(batch[9])
 
-        if words.shape[1] != pos.shape[1]:
-            print('words: {} | pos: {} | ner: {}'.format(words.shape, pos.shape, ner.shape))
-            exit()
+        print('words: {} | pos: {} | ner: {}'.format(words.shape, pos.shape, ner.shape))
+            # exit()
 
         return (words, masks, pos, ner, deprel, head, subj_positions,
                 obj_positions, subj_type, obj_type, rels, orig_idx)
