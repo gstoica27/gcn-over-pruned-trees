@@ -105,7 +105,7 @@ class DataLoader(object):
             words = self.pad_tokens(words)
             words = torch.from_numpy(words)
             masks = torch.eq(words.sum(-1), 0)
-            token_len = words.shape[1]
+            token_len = None
         else:
             words = get_long_tensor(words, batch_size)
             masks = torch.eq(words, 0)
@@ -114,6 +114,9 @@ class DataLoader(object):
         ner = get_long_tensor(batch[2], batch_size, token_len=token_len)
         deprel = get_long_tensor(batch[3], batch_size, token_len=token_len)
         head = get_long_tensor(batch[4], batch_size, token_len=token_len)
+        if pos.shape[1] != words.shape[1]:
+            words = words[:, :pos.shape[1], :]
+            masks = masks[:, :pos.shape[1], :]
         # dummy fill value larger than max sentence length (96). positions are
         # ONLY used to create the masks, so it does not matter what the fill
         # value is as long as it's not 0 (0 denotes subject/objects).
