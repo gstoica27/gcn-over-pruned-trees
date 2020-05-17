@@ -198,7 +198,7 @@ class TreeLSTMWrapper(nn.Module):
 
         self.emb, self.pos_emb, self.ner_emb, self.deprel_emb = embeddings
         # self.emb, self.pos_emb, self.ner_emb = embeddings
-        self.emb_dropout = EmbeddingDropout(opt['input_dropout'])
+        self.emb_dropout = EmbeddingDropout(opt['emb_dropout'])
         # rnn layer
         if self.opt.get('rnn', False):
             input_size = self.in_dim

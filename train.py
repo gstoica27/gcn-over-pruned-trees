@@ -103,6 +103,7 @@ parser.add_argument('--num_tree_lstms', type=int, default=1)
 parser.add_argument('--tree_x_dropout', type=float, default=.0)
 parser.add_argument('--tree_h_dropout', type=float, default=.0)
 parser.add_argument('--node_pooling', type=str2bool, default=False)
+parser.add_argument('--emb_dropout', type=float, default=.0)
 
 args = parser.parse_args()
 
