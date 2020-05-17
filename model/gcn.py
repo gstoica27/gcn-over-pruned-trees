@@ -10,6 +10,7 @@ import numpy as np
 
 from model.tree import Tree, head_to_tree, tree_to_adj
 from utils import constant, torch_utils
+from model.dropouts import EmbeddingDropout
 
 class GCNClassifier(nn.Module):
     """ A wrapper classifier for GCNRelationModel. """
@@ -135,6 +136,7 @@ class GCN(nn.Module):
 
         self.in_drop = nn.Dropout(opt['input_dropout'])
         self.gcn_drop = nn.Dropout(opt['gcn_dropout'])
+        self.token_dropout = EmbeddingDropout(opt['emb_dropout'])
 
         # gcn input encoding
         if opt['adj_type'] in ['diagonal_deprel']:
@@ -183,7 +185,8 @@ class GCN(nn.Module):
         if len(words.shape) > 2:
             word_embs = words
         else:
-            word_embs = self.emb(words)
+            # word_embs = self.emb(words)
+            word_embs = self.token_dropout(self.emb, words)
         embs = [word_embs]
         if self.opt['pos_dim'] > 0:
             embs += [self.pos_emb(pos)]

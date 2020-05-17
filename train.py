@@ -100,6 +100,7 @@ parser.add_argument('--deprel_emb_dim',type=int, default=200)
 parser.add_argument('--deprel_dropout', type=float, default=.5)
 
 parser.add_argument('--use_bert_embeddings', type=str2bool, default=False)
+parser.add_argument('--emb_dropout', type=float, default=.04)
 
 args = parser.parse_args()
 
