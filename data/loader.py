@@ -109,8 +109,10 @@ class DataLoader(object):
             # [SEP] which in this case is [PAD].
             words = self.bert_client.encode(words, is_tokenized=True)[:, 1:-1, :]
             words = torch.from_numpy(words)
-        words = get_long_tensor(words, batch_size)
-        masks = torch.eq(words, 0)
+            masks = torch.eq(words.sum(-1), 0)
+        else:
+            words = get_long_tensor(words, batch_size)
+            masks = torch.eq(words, 0)
         pos = get_long_tensor(batch[1], batch_size)
         ner = get_long_tensor(batch[2], batch_size)
         deprel = get_long_tensor(batch[3], batch_size)
