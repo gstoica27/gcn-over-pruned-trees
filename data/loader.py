@@ -8,21 +8,23 @@ import torch
 import numpy as np
 
 from utils import constant, helper, vocab
-from bert_serving.client import BertClient
+import pickle
 
 class DataLoader(object):
     """
     Load data from json files, preprocess and prepare batches.
     """
-    def __init__(self, filename, batch_size, opt, vocab, evaluation=False, use_bert=False):
+    def __init__(self, filename, batch_size, opt, vocab, evaluation=False, bert_embeddings=None):
         self.batch_size = batch_size
         self.opt = opt
         self.vocab = vocab
         self.eval = evaluation
         self.label2id = constant.LABEL_TO_ID
-        self.use_bert = use_bert
-        if self.use_bert:
-            self.bert_client = BertClient()
+
+        if bert_embeddings is not None:
+            self.id2embeddings = pickle.load(open(bert_embeddings))
+        else:
+            self.id2embeddings = None
 
         with open(filename) as infile:
             data = json.load(infile)
@@ -55,7 +57,9 @@ class DataLoader(object):
             os, oe = d['obj_start'], d['obj_end']
             tokens[ss:se+1] = ['SUBJ-'+d['subj_type']] * (se-ss+1)
             tokens[os:oe+1] = ['OBJ-'+d['obj_type']] * (oe-os+1)
-            if not self.use_bert:
+            if self.id2embeddings is not None:
+                tokens = self.id2embeddings[d['id']]
+            else:
                 tokens = map_to_ids(tokens, vocab.word2id)
 
             pos = map_to_ids(d['stanford_pos'], constant.POS_TO_ID)
@@ -95,19 +99,14 @@ class DataLoader(object):
         batch, orig_idx = sort_all(batch, lens)
 
         # word dropout
-        if not self.eval:
-            words = [word_dropout(sent, self.opt['word_dropout'], self.use_bert) for sent in batch[0]]
+        if not self.eval and self.id2embeddings is None:
+            words = [word_dropout(sent, self.opt['word_dropout'], False) for sent in batch[0]]
         else:
             words = batch[0]
 
         # convert to tensors
-        if self.use_bert:
-            # Extract BERT embeddings. Remove first index b/c it's [CLS], and last index as its [SEP].
-            # Note, we assume that the BERT client masks out [CLS] and [SEP], which is why we are able
-            # to remove the last token element (it is equivalent to an additional PAD vector, and each
-            # sentence is guaranteed to have at least one of these. This is because very sentence has
-            # [SEP] which in this case is [PAD].
-            words = self.bert_client.encode(words, is_tokenized=True)[:, 1:-1, :]
+        if self.id2embeddings is not None:
+            words = self.pad_tokens(words)
             words = torch.from_numpy(words)
             masks = torch.eq(words.sum(-1), 0)
         else:
@@ -127,11 +126,21 @@ class DataLoader(object):
 
         rels = torch.LongTensor(batch[9])
 
-        return (words, masks, pos, ner, deprel, head, subj_positions, obj_positions, subj_type, obj_type, rels, orig_idx)
+        return (words, masks, pos, ner, deprel, head, subj_positions,
+                obj_positions, subj_type, obj_type, rels, orig_idx)
 
     def __iter__(self):
         for i in range(self.__len__()):
             yield self.__getitem__(i)
+
+    def pad_tokens(self, embeddings):
+        max_len = embeddings.shape[-1]
+        for idx in enumerate(embeddings):
+            pad_amount = max_len - embeddings[idx].shape[0]
+            padding = np.zeros((pad_amount, embeddings.shape[-1]), dtype=np.float32)
+            embeddings[idx] = np.concatenate([embeddings[idx], padding], axis=0)
+        return embeddings
+
 
 def map_to_ids(tokens, vocab):
     ids = [vocab[t] if t in vocab else constant.UNK_ID for t in tokens]

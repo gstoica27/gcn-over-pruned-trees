@@ -133,11 +133,17 @@ else:
     assert emb_matrix.shape[0] == vocab.size
     assert emb_matrix.shape[1] == opt['emb_dim']
 
-# load data
+if opt['use_bert_embeddings']:
+    embeddings_file = '/usr0/home/gis/data/bert_saves/id2embeddings.pkl'
+else:
+    embeddings_file = None
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt, vocab, evaluation=False, use_bert=opt['use_bert_embeddings'])
-dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt, vocab, evaluation=True, use_bert=opt['use_bert_embeddings'])
-test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt, vocab, evaluation=True, use_bert=opt['use_bert_embeddings'])
+train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt,
+                         vocab, evaluation=False, bert_embeddings=embeddings_file)
+dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt,
+                       vocab, evaluation=True, bert_embeddings=embeddings_file)
+test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt,
+                        vocab, evaluation=True, bert_embeddings=embeddings_file)
 
 model_id = opt['id'] if len(opt['id']) > 1 else '0' + opt['id']
 model_save_dir = opt['model_save_dir'] + '/' + model_id

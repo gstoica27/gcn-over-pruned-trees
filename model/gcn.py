@@ -187,6 +187,7 @@ class GCN(nn.Module):
         else:
             # word_embs = self.emb(words)
             word_embs = self.token_dropout(self.emb, words)
+            # word_embs = words
         embs = [word_embs]
         if self.opt['pos_dim'] > 0:
             embs += [self.pos_emb(pos)]
