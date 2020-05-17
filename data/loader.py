@@ -105,18 +105,20 @@ class DataLoader(object):
             words = self.pad_tokens(words)
             words = torch.from_numpy(words)
             masks = torch.eq(words.sum(-1), 0)
+            token_len = words.shape[1]
         else:
             words = get_long_tensor(words, batch_size)
             masks = torch.eq(words, 0)
-        pos = get_long_tensor(batch[1], batch_size)
-        ner = get_long_tensor(batch[2], batch_size)
-        deprel = get_long_tensor(batch[3], batch_size)
-        head = get_long_tensor(batch[4], batch_size)
+            token_len = None
+        pos = get_long_tensor(batch[1], batch_size, token_len=token_len)
+        ner = get_long_tensor(batch[2], batch_size, token_len=token_len)
+        deprel = get_long_tensor(batch[3], batch_size, token_len=token_len)
+        head = get_long_tensor(batch[4], batch_size, token_len=token_len)
         # dummy fill value larger than max sentence length (96). positions are
         # ONLY used to create the masks, so it does not matter what the fill
         # value is as long as it's not 0 (0 denotes subject/objects).
-        subj_positions = get_long_tensor(batch[5], batch_size, fill_value=150)
-        obj_positions = get_long_tensor(batch[6], batch_size, fill_value=150)
+        subj_positions = get_long_tensor(batch[5], batch_size, fill_value=150, token_len=token_len)
+        obj_positions = get_long_tensor(batch[6], batch_size, fill_value=150, token_len=token_len)
         subj_type = get_long_tensor(batch[7], batch_size)
         obj_type = get_long_tensor(batch[8], batch_size)
 
@@ -153,9 +155,10 @@ def get_positions(start_idx, end_idx, length):
     return list(range(-start_idx, 0)) + [0]*(end_idx - start_idx + 1) + \
             list(range(1, length-end_idx))
 
-def get_long_tensor(tokens_list, batch_size, fill_value=constant.PAD_ID):
+def get_long_tensor(tokens_list, batch_size, fill_value=constant.PAD_ID, token_len=None):
     """ Convert list of list of tokens to a padded LongTensor. """
-    token_len = max(len(x) for x in tokens_list)
+    if token_len is None:
+        token_len = max(len(x) for x in tokens_list)
     tokens = torch.LongTensor(batch_size, token_len).fill_(fill_value)
     for i, s in enumerate(tokens_list):
         tokens[i, :len(s)] = torch.LongTensor(s)
