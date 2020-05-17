@@ -124,7 +124,7 @@ class DataLoader(object):
 
         rels = torch.LongTensor(batch[9])
 
-        print('words: {} | pos: {} | ner: {}'.format(words.shape, pos.shape, ner.shape))
+        print('words: {} | pos: {} | ner: {} | mask: {}'.format(words.shape, pos.shape, ner.shape, masks.shape))
             # exit()
 
         return (words, masks, pos, ner, deprel, head, subj_positions,
