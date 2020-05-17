@@ -22,6 +22,7 @@ class DataLoader(object):
         self.label2id = constant.LABEL_TO_ID
 
         if bert_embeddings is not None:
+            print('Loading BERT Embeddings...')
             self.id2embeddings = pickle.load(open(bert_embeddings))
         else:
             self.id2embeddings = None
