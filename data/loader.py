@@ -116,7 +116,7 @@ class DataLoader(object):
         head = get_long_tensor(batch[4], batch_size, token_len=token_len)
         if pos.shape[1] != words.shape[1]:
             words = words[:, :pos.shape[1], :]
-            masks = masks[:, :pos.shape[1], :]
+            masks = masks[:, :pos.shape[1]]
         # dummy fill value larger than max sentence length (96). positions are
         # ONLY used to create the masks, so it does not matter what the fill
         # value is as long as it's not 0 (0 denotes subject/objects).
