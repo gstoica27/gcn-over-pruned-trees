@@ -122,13 +122,16 @@ vocab_file = opt['vocab_dir'] + '/vocab.pkl'
 vocab = Vocab(vocab_file, load=True)
 opt['vocab_size'] = vocab.size
 emb_file = opt['vocab_dir'] + '/embedding.npy'
-emb_matrix = np.load(emb_file)
-assert emb_matrix.shape[0] == vocab.size
-assert emb_matrix.shape[1] == opt['emb_dim']
 
 # Change embedding size for BERT
 if opt['use_bert_embeddings']:
     opt['emb_dim'] = 1024
+    emb_matrix = None
+else:
+    emb_matrix = np.load(emb_file)
+    assert emb_matrix.shape[0] == vocab.size
+    assert emb_matrix.shape[1] == opt['emb_dim']
+
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
 train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt, vocab, evaluation=False, use_bert=opt['use_bert_embeddings'])
