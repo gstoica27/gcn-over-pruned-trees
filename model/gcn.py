@@ -105,11 +105,6 @@ class GCNRelationModel(nn.Module):
         h, pool_mask = self.gcn(adj, inputs)
         # pooling
         subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
-        print(
-            'Shapes: | Words: {} | POS: {} | NER: {} | HEAD: {} | DEPREL: {} | MASKS:{} | SUBJ-POS: {} | OBJ-POS: {}'.format(
-                words.shape, pos.shape, ner.shape, head.shape, deprel.shape, masks.shape, subj_pos.shape,
-                obj_pos.shape
-            ))
         # subj_mask = subj_mask[:, :h.shape[1]]
         # obj_mask = obj_mask[:, :h.shape[1]]
         # pool_mask = pool_mask[:, :h.shape[1]]
