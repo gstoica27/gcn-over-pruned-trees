@@ -47,17 +47,31 @@ class Trainer(object):
 
 
 def unpack_batch(batch, cuda):
-    if cuda:
-        inputs = [Variable(b.cuda()) for b in batch[:10]]
-        labels = Variable(batch[10].cuda())
+    if len(batch) >= 10:
+        if cuda:
+            inputs = [Variable(b.cuda()) for b in batch[:10]]
+            labels = Variable(batch[10].cuda())
+        else:
+            inputs = [Variable(b) for b in batch[:10]]
+            labels = Variable(batch[10])
+        tokens = batch[0]
+        head = batch[5]
+        subj_pos = batch[6]
+        obj_pos = batch[7]
+        lens = batch[1].eq(0).long().sum(1).squeeze()
     else:
-        inputs = [Variable(b) for b in batch[:10]]
-        labels = Variable(batch[10])
-    tokens = batch[0]
-    head = batch[5]
-    subj_pos = batch[6]
-    obj_pos = batch[7]
-    lens = batch[1].eq(0).long().sum(1).squeeze()
+        if cuda:
+            inputs = [Variable(b.cuda()) for b in batch[:-2]]
+            labels = Variable(batch[-2].cuda())
+        else:
+            inputs = [Variable(b) for b in batch[:-2]]
+            labels = Variable(batch[-2])
+        tokens = batch[0]
+        head = batch[4]
+        subj_pos = batch[5]
+        obj_pos = batch[6]
+        lens = batch[1].eq(0).long().sum(1).squeeze()
+
     return inputs, labels, tokens, head, subj_pos, obj_pos, lens
 
 class GCNTrainer(Trainer):

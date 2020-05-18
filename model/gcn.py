@@ -106,7 +106,10 @@ class GCNRelationModel(nn.Module):
         return (row_top_offset, row_bottom_offset, col_right_offset)
 
     def forward(self, inputs):
-        words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
+        if self.opt['dataset'] == 'tacred':
+            words, masks, pos, ner, deprel, head, subj_pos, obj_pos = inputs # unpack
+        else:
+            words, masks, pos, deprel, head, subj_pos, obj_pos = inputs  # unpack
         l = (masks.data.cpu().numpy() == 0).astype(np.int64).sum(1)
         maxlen = max(l)
 
@@ -194,7 +197,7 @@ class TreeLSTMWrapper(nn.Module):
         self.layers = num_layers
         self.use_cuda = opt['cuda']
         self.mem_dim = mem_dim
-        self.in_dim = opt['emb_dim'] + opt['pos_dim'] + opt['ner_dim']
+        self.in_dim = opt['emb_dim'] + opt['pos_dim'] + (opt['ner_dim'] * int(self.opt['dataset'] == 'tacred'))
 
         self.emb, self.pos_emb, self.ner_emb, self.deprel_emb = embeddings
         # self.emb, self.pos_emb, self.ner_emb = embeddings
@@ -239,13 +242,16 @@ class TreeLSTMWrapper(nn.Module):
         return rnn_outputs
 
     def forward(self, trees, inputs, max_depth, max_bottom_offset):
-        words, masks, pos, ner, deprel, head, subj_pos, obj_pos, subj_type, obj_type = inputs # unpack
+        if self.opt['dataset'] == 'tacred':
+            words, masks, pos, ner, deprel, head, subj_pos, obj_pos = inputs # unpack
+        else:
+            words, masks, pos, deprel, head, subj_pos, obj_pos = inputs  # unpack
         word_embs = self.emb_dropout(self.emb, words)
         # word_embs = self.emb(words)
         embs = [word_embs]
         if self.opt['pos_dim'] > 0:
             embs += [self.pos_emb(pos)]
-        if self.opt['ner_dim'] > 0:
+        if self.opt['ner_dim'] > 0 and self.opt['dataset'] == 'tacred':
             embs += [self.ner_emb(ner)]
         embs = torch.cat(embs, dim=2)
         embs = self.in_drop(embs)
