@@ -329,12 +329,12 @@ for epoch in range(1, opt['num_epoch'] + 1):
         os.remove(model_file)
 
     # lr schedule
-    if len(dev_score_history) > opt['decay_epoch'] and dev_score <= dev_score_history[-1] and \
+    if len(train_score_history) > opt['decay_epoch'] and train_score <= train_score_history[-1] and \
             opt['optim'] in ['sgd', 'adagrad', 'adadelta']:
         current_lr *= opt['lr_decay']
         trainer.update_lr(current_lr)
 
-    dev_score_history += [dev_score]
+    train_score_history += [train_score]
     print("")
 
 print("Training ended with {} epochs.".format(epoch))
