@@ -123,9 +123,9 @@ class DataLoader(object):
         obj_type = get_long_tensor(batch[8], batch_size)
 
         if pos.shape[1] != words.shape[1]:
-           print('Shapes: | Words: {} | POS: {} | NER: {} | HEAD: {} | DEPREL: {} | MASKS:{} | SUBJ-POS: {} | OBJ-POS: {} |'.format(
+            print('Shapes: | Words: {} | POS: {} | NER: {} | HEAD: {} | DEPREL: {} | MASKS:{} | SUBJ-POS: {} | OBJ-POS: {} |'.format(
                words.shape, pos.shape, ner.shape, head.shape, deprel.shape, masks.shape, subj_positions.shape, obj_positions.shape
-           ))
+            ))
             word_embs = words.sum(-1)
             print(f'WORD EMBS: {word_embs}')
 
