@@ -122,8 +122,9 @@ class DataLoader(object):
         obj_positions = get_long_tensor(batch[6], batch_size, fill_value=150, token_len=token_len)[:, :num_actual_tokens]
         subj_type = get_long_tensor(batch[7], batch_size)
         obj_type = get_long_tensor(batch[8], batch_size)
-        words = words[:, :num_actual_tokens, :]
-        masks = masks[:, :num_actual_tokens]
+        if self.opt['use_bert_embeddings']:
+            words = words[:, :num_actual_tokens, :]
+            masks = masks[:, :num_actual_tokens]
 
         if pos.shape[1] != words.shape[1]:
             print('Shapes: | Words: {} | POS: {} | NER: {} | HEAD: {} | DEPREL: {} | MASKS:{} | SUBJ-POS: {} | OBJ-POS: {} |'.format(
