@@ -60,7 +60,7 @@ class GCNRelationModel(nn.Module):
         if opt ['node_pooling']:
             multiplier = 3
         else:
-            multiplier = 2
+            multiplier = 3
         in_dim = opt['hidden_dim']* multiplier
         layers = [nn.Linear(in_dim, opt['hidden_dim']), nn.ReLU()]
         for _ in range(self.opt['mlp_layers']-1):
@@ -170,8 +170,8 @@ class GCNRelationModel(nn.Module):
             sentence_rep = pool(tree_encodings, pool_mask, type=pool_type)
             subject_rep = pool(tree_encodings, subj_mask, type=pool_type)
             object_rep = pool(tree_encodings, obj_mask, type=pool_type)
-            # outputs = torch.cat([sentence_rep, subject_rep, object_rep], dim=1)
-            outputs = torch.cat([subject_rep, object_rep], dim=1)
+            outputs = torch.cat([sentence_rep, subject_rep, object_rep], dim=1)
+            # outputs = torch.cat([subject_rep, object_rep], dim=1)
         outputs = self.out_mlp(outputs)
         return outputs, sentence_rep, (subject_rep, object_rep)
 
@@ -267,13 +267,11 @@ class TreeLSTMWrapper(nn.Module):
         # mask = torch.where(trees != 0, torch.ones_like(trees), torch.zeros_like(trees)).type(torch.float32)
         # Adjacency matrix is 2-indexed, so anything less than 2 is treated as a "PAD" value, and masked out
         # in sentence pooling downstream
-        sentence_mask = torch.where(trees > 1, torch.ones_like(trees), torch.zeros_like(trees)).type(torch.float32)
-        directed = False
-        if not directed:
-            # Make adjacency matrix square for undirectedness if necessary
-            sentence_mask = self.maybe_squarify_matrix(sentence_mask)
-            sentence_mask += sentence_mask.permute(0, 2, 1)
-        sentence_mask = (sentence_mask.sum(2) + sentence_mask.sum(1)).eq(0).unsqueeze(2)
+        batch_size, num_tokens, num_children = trees.shape
+        sentence_mask = torch.where(trees != 0,
+                                    torch.ones_like(trees),
+                                    torch.zeros_like(trees)).type(torch.float32)
+        sentence_mask = sentence_mask.sum(2, keepdim=True).eq(0)
 
         lstm_inputs = gcn_inputs
         for tree_lstm in self.tree_lstms:
