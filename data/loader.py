@@ -117,10 +117,13 @@ class DataLoader(object):
         # dummy fill value larger than max sentence length (96). positions are
         # ONLY used to create the masks, so it does not matter what the fill
         # value is as long as it's not 0 (0 denotes subject/objects).
-        subj_positions = get_long_tensor(batch[5], batch_size, fill_value=150, token_len=token_len)
-        obj_positions = get_long_tensor(batch[6], batch_size, fill_value=150, token_len=token_len)
+        num_actual_tokens = pos.shape[1]
+        subj_positions = get_long_tensor(batch[5], batch_size, fill_value=150, token_len=token_len)[:, :num_actual_tokens]
+        obj_positions = get_long_tensor(batch[6], batch_size, fill_value=150, token_len=token_len)[:, :num_actual_tokens]
         subj_type = get_long_tensor(batch[7], batch_size)
         obj_type = get_long_tensor(batch[8], batch_size)
+        words = words[:, :num_actual_tokens, :]
+        masks = masks[:, :num_actual_tokens]
 
         if pos.shape[1] != words.shape[1]:
             print('Shapes: | Words: {} | POS: {} | NER: {} | HEAD: {} | DEPREL: {} | MASKS:{} | SUBJ-POS: {} | OBJ-POS: {} |'.format(
