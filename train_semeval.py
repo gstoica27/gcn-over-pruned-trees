@@ -193,7 +193,7 @@ best_train_metrics = defaultdict(lambda: -np.inf)
 test_metrics_at_best_train = defaultdict(lambda: -np.inf)
 
 # start training
-update_gap = int(50 / opt['batch_size'])
+update_gap = max(int(50 / opt['batch_size']), 1)
 for epoch in range(1, opt['num_epoch'] + 1):
     train_loss = 0
     # Training in-case of mini-batches
