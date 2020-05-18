@@ -128,6 +128,8 @@ class DataLoader(object):
             ))
             word_embs = words.sum(-1)
             print(f'WORD EMBS: {word_embs[:, -1]}')
+            print(f'SUJB-POS: {subj_positions[:, -1]}')
+            print(f'OBJ-POS: {obj_positions[:, -1]}')
 
         rels = torch.LongTensor(batch[9])
 
