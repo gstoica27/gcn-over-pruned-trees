@@ -114,9 +114,6 @@ class DataLoader(object):
         ner = get_long_tensor(batch[2], batch_size, token_len=token_len)
         deprel = get_long_tensor(batch[3], batch_size, token_len=token_len)
         head = get_long_tensor(batch[4], batch_size, token_len=token_len)
-        if pos.shape[1] != words.shape[1]:
-            words = words[:, :pos.shape[1], :]
-            masks = masks[:, :pos.shape[1]]
         # dummy fill value larger than max sentence length (96). positions are
         # ONLY used to create the masks, so it does not matter what the fill
         # value is as long as it's not 0 (0 denotes subject/objects).
@@ -124,6 +121,11 @@ class DataLoader(object):
         obj_positions = get_long_tensor(batch[6], batch_size, fill_value=150, token_len=token_len)
         subj_type = get_long_tensor(batch[7], batch_size)
         obj_type = get_long_tensor(batch[8], batch_size)
+
+        if pos.shape[1] != words.shape[1]:
+           print('Shapes: | Words: {} | POS: {} | NER: {} | HEAD: {} | DEPREL: {} | MASKS:{} | SUBJ-POS: {} | OBJ-POS: {}'.format(
+               words.shape, pos.shape, ner.shape, head.shape, deprel.shape, masks.shape, subj_positions.shape, obj_positions.shape
+           ))
 
         rels = torch.LongTensor(batch[9])
 
