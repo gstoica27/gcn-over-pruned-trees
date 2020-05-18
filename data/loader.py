@@ -91,7 +91,7 @@ class DataLoader(object):
         assert len(batch) == 10
 
         # sort all fields by lens for easy RNN operations
-        lens = [len(x) for x in batch[0]]
+        lens = [len(x) for x in batch[1]]
         batch, orig_idx = sort_all(batch, lens)
 
         # word dropout
