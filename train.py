@@ -105,6 +105,7 @@ parser.add_argument('--tree_h_dropout', type=float, default=.0)
 parser.add_argument('--node_pooling', type=str2bool, default=False)
 parser.add_argument('--emb_dropout', type=float, default=.0)
 parser.add_argument('--use_bert_embeddings', type=str2bool, default=False)
+parser.add_argument('--dataset', default='tacred', type=str)
 
 args = parser.parse_args()
 
