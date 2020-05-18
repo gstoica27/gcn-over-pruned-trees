@@ -127,7 +127,7 @@ class DataLoader(object):
                words.shape, pos.shape, ner.shape, head.shape, deprel.shape, masks.shape, subj_positions.shape, obj_positions.shape
             ))
             word_embs = words.sum(-1)
-            print(f'WORD EMBS: {word_embs}')
+            print(f'WORD EMBS: {word_embs[:, -1]}')
 
         rels = torch.LongTensor(batch[9])
 
