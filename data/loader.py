@@ -41,37 +41,10 @@ class DataLoader(object):
         self.data = data
         print("{} batches created for {}".format(len(data), filename))
 
-    def compute_triple2data(self, data):
-        triple2data = {}
-        for d in data:
-            subject = d['subj_type']
-            object = d['obj_type']
-            relation = d['relation']
-            triple = (subject, relation, object)
-            if triple not in triple2data:
-                triple2data[triple] = []
-            triple2data[triple].append(d)
-        return triple2data
-
-    def subsample_triples(self, data):
-        triple2data = self.compute_triple2data(data)
-        save_prop = self.opt['train_prop']
-        keep_data = []
-        for triple, triple_data in triple2data.items():
-            save_amount = int(len(triple_data) * save_prop)
-            if save_amount == 0:
-                save_amount = len(triple_data)
-            save_data = np.random.choice(triple_data, save_amount, replace=False).tolist()
-            keep_data += save_data
-        return keep_data
-
     def preprocess(self, data, vocab, opt):
         """ Preprocess the data and convert to ids. """
         processed = []
         # data = data[:100]
-        if opt['train_prop'] < 1.0:
-            data = self.subsample_triples(data)
-            np.random.shuffle(data)
         for d in data:
             tokens = list(d['token'])
             if opt['lower']:
