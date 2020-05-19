@@ -94,10 +94,8 @@ class DataLoader(object):
             l = len(tokens)
             subj_positions = get_positions(d['subj_start'], d['subj_end'], l)
             obj_positions = get_positions(d['obj_start'], d['obj_end'], l)
-            subj_type = [constant.SUBJ_NER_TO_ID[d['subj_type']]]
-            obj_type = [constant.OBJ_NER_TO_ID[d['obj_type']]]
             relation = self.label2id[d['relation']]
-            processed += [(tokens, pos, ner, deprel, head, subj_positions, obj_positions, subj_type, obj_type, relation)]
+            processed += [(tokens, pos, ner, deprel, head, subj_positions, obj_positions, relation)]
         return processed
 
     def gold(self):
@@ -116,7 +114,7 @@ class DataLoader(object):
         batch = self.data[key]
         batch_size = len(batch)
         batch = list(zip(*batch))
-        assert len(batch) == 10
+        assert len(batch) == 8
 
         # sort all fields by lens for easy RNN operations
         lens = [len(x) for x in batch[1]]
@@ -148,8 +146,6 @@ class DataLoader(object):
         num_actual_tokens = pos.shape[1]
         subj_positions = get_long_tensor(batch[5], batch_size, fill_value=150, token_len=token_len)[:, :num_actual_tokens]
         obj_positions = get_long_tensor(batch[6], batch_size, fill_value=150, token_len=token_len)[:, :num_actual_tokens]
-        subj_type = get_long_tensor(batch[7], batch_size)
-        obj_type = get_long_tensor(batch[8], batch_size)
         if self.opt['use_bert_embeddings']:
             words = words[:, :num_actual_tokens, :]
             masks = masks[:, :num_actual_tokens]
@@ -163,13 +159,13 @@ class DataLoader(object):
             print(f'SUJB-POS: {subj_positions[:, -1]}')
             print(f'OBJ-POS: {obj_positions[:, -1]}')
 
-        rels = torch.LongTensor(batch[9])
+        rels = torch.LongTensor(batch[7])
 
         # print('words: {} | pos: {} | ner: {} | mask: {}'.format(words.shape, pos.shape, ner.shape, masks.shape))
             # exit()
 
         return (words, masks, pos, ner, deprel, head, subj_positions,
-                obj_positions, subj_type, obj_type, rels, orig_idx)
+                obj_positions, rels, orig_idx)
 
     def __iter__(self):
         for i in range(self.__len__()):
