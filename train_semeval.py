@@ -17,7 +17,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 from collections import defaultdict
 
-from data.loader import DataLoader
+from data.semeval_loader import DataLoader
 from model.trainer import GCNTrainer
 from utils import torch_utils, scorer, constant_semeval as constant, helper
 from utils.vocab import Vocab
@@ -29,24 +29,20 @@ on_server = 'Desktop' not in cwd
 def str2bool(v):
     return v.lower() in ('true')
 
-dataset = 'tacred'
 # Local paths
-local_data_dir = f'/Volumes/External HDD/dataset/{dataset}/data/json'
-local_vocab_dir = f'/Volumes/External HDD/dataset/{dataset}/data/vocab'
-local_model_save_dir = f'/Volumes/External HDD/dataset/{dataset}/saved_models'
-local_test_save_dir = os.path.join(cwd, '{dataset}_test_performances')
-os.makedirs(local_test_save_dir, exist_ok=True)
+if not on_server:
+    data_dir = '/Volumes/External HDD/dataset/semeval/data/json'
+    vocab_dir = '/Volumes/External HDD/dataset/semeval/data/vocab'
+    model_save_dir = '/Volumes/External HDD/dataset/semeval/saved_models'
+    test_save_dir = os.path.join(cwd, '{dataset}_test_performances')
+    os.makedirs(test_save_dir, exist_ok=True)
 # Server paths
-server_data_dir = f'/usr0/home/gis/data/{dataset}/data/json'
-server_vocab_dir = f'/usr0/home/gis/data/{dataset}/data/vocab'
-server_model_save_dir = '/usr0/home/gis/research/tacred-exploration/saved_models'
-server_test_save_dir = f'/usr0/home/gis/research/tacred-exploration/{dataset}_test_performances'
-os.makedirs(server_test_save_dir, exist_ok=True)
-# paths
-data_dir = server_data_dir if on_server else local_data_dir
-vocab_dir = server_vocab_dir if on_server else local_vocab_dir
-model_save_dir = server_model_save_dir if on_server else local_model_save_dir
-test_save_dir = server_test_save_dir if on_server else local_test_save_dir
+else:
+    data_dir = '/usr0/home/gis/data/semeval/data/json'
+    vocab_dir = '/usr0/home/gis/data/semeval/data/vocab'
+    model_save_dir = '/usr0/home/gis/research/tacred-exploration/saved_models'
+    test_save_dir = '/usr0/home/gis/research/tacred-exploration/semeval_test_performances'
+    os.makedirs(test_save_dir, exist_ok=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default=data_dir)
@@ -106,8 +102,8 @@ parser.add_argument('--deprel_emb_dim', type=int, default=200)
 parser.add_argument('--deprel_dropout', type=float, default=.5)
 
 parser.add_argument('--use_bert_embeddings', type=str2bool, default=False)
-parser.add_argument('--emb_dropout', type=float, default=.04)
-parser.add_argument('--dataset', type=str, default=dataset)
+parser.add_argument('--emb_dropout', type=float, default=.0)
+parser.add_argument('--dataset', type=str, default='semeval')
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -124,7 +120,7 @@ opt = vars(args)
 label2id = constant.LABEL_TO_ID
 opt['num_class'] = len(label2id)
 
-# load vocab
+# load vocab`
 vocab_file = opt['vocab_dir'] + '/vocab.pkl'
 vocab = Vocab(vocab_file, load=True)
 opt['vocab_size'] = vocab.size
@@ -196,7 +192,7 @@ best_train_metrics = defaultdict(lambda: -np.inf)
 test_metrics_at_best_train = defaultdict(lambda: -np.inf)
 
 # start training
-update_gap = int(50 / opt['batch_size'])
+update_gap = max(int(50 / opt['batch_size']), 1)
 for epoch in range(1, opt['num_epoch'] + 1):
     train_loss = 0
     # Training in-case of mini-batches

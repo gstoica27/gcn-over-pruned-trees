@@ -81,7 +81,7 @@ class DataLoader(object):
         batch = self.data[key]
         batch_size = len(batch)
         batch = list(zip(*batch))
-        assert len(batch) == 10
+        assert len(batch) == 7
 
         # sort all fields by lens for easy RNN operations
         lens = [len(x) for x in batch[1]]
