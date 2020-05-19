@@ -106,7 +106,7 @@ parser.add_argument('--node_pooling', type=str2bool, default=False)
 parser.add_argument('--emb_dropout', type=float, default=.0)
 parser.add_argument('--use_bert_embeddings', type=str2bool, default=False)
 parser.add_argument('--dataset', default='tacred', type=str)
-
+parser.add_argument('--train_prop', default=1.0, type=float)
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
