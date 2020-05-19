@@ -6,6 +6,7 @@ import json
 import random
 import torch
 import numpy as np
+import os
 
 from utils import constant, helper, vocab
 import pickle
@@ -20,6 +21,7 @@ class DataLoader(object):
         self.vocab = vocab
         self.eval = evaluation
         self.label2id = constant.LABEL_TO_ID
+        self.filename = filename
         if bert_embeddings is not None:
             self.id2bert_embs = pickle.load(open(bert_embeddings, 'rb'))
 
@@ -70,9 +72,6 @@ class DataLoader(object):
         """ Preprocess the data and convert to ids. """
         processed = []
         # data = data[:100]
-        if opt['train_prop'] < 1.0:
-            data = self.subsample_triples(data)
-            np.random.shuffle(data)
         for d in data:
             tokens = list(d['token'])
             if opt['lower']:
