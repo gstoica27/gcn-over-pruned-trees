@@ -70,6 +70,7 @@ class BatchedChildSumTreeLSTM(nn.Module):
             self.deprel_proj = nn.Linear(deprel_emb, self.mem_dim, bias=False)
             self.h_proj = nn.Linear(self.mem_dim, self.mem_dim, bias=False)
             self.attn_v = nn.Linear(self.mem_dim, 1, bias=False)
+            self.last_proj = nn.Linear(self.mem_dim, self.mem_dim)
 
         # self.input_dropout = VariationalDropout(dropout=self.x_dropout)
         # self.output_dropout = VariationalDropout(dropout=self.x_dropout)
@@ -122,6 +123,7 @@ class BatchedChildSumTreeLSTM(nn.Module):
             a_j = self.attn_v(torch.tanh(self.h_proj(child_hidden) + self.deprel_proj(child_deprel)))
             a_j = self.masked_softmax(a_j, mask=child_mask, dim=2)
             h_j = (child_hidden * child_mask * a_j).sum(2)
+            h_j =torch.tanh(self.last_proj(h_j))
         x_iouf = self.x_iouf(inputs)                      # [B,T1,4H]
         h_iou = self.h_iou(h_j)                           # [B,T1,3H]
         x_i, x_o, x_u, x_f = torch.split(x_iouf, int(x_iouf.shape[-1] / 4), dim=2)

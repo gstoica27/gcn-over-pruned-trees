@@ -279,7 +279,11 @@ class TreeLSTMWrapper(nn.Module):
                 batch_deprel_embs = self.deprel_emb(deprel)
                 batch_size, token_len, emb_dim = batch_deprel_embs.shape
                 flat_deprel_embs = batch_deprel_embs.reshape((batch_size * token_len, emb_dim))
-                child_deprel_embs = F.embedding(trees.type(torch.long), flat_deprel_embs, 0, 2, False, False)
+                # Deprels are used only from children of parents. So we exclude leaf nodes
+                deprel_adj = torch.where(trees % num_tokens > 1, trees, torch.zeros_like(trees))
+                # Zero-index for accurate deprel indexing
+                deprel_adj = torch.max(deprel_adj - 2, torch.zeros_like(deprel_adj))
+                child_deprel_embs = F.embedding(deprel_adj.type(torch.long), flat_deprel_embs, 0, 2, False, False)
             else:
                 child_deprel_embs = None
             lstm_inputs = tree_lstm(lstm_inputs, trees, mask, max_depth, child_deprel_embs)
