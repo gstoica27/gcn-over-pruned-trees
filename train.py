@@ -101,7 +101,7 @@ parser.add_argument('--deprel_dropout', type=float, default=.5)
 
 parser.add_argument('--use_bert_embeddings', type=str2bool, default=False)
 parser.add_argument('--emb_dropout', type=float, default=.04)
-
+parser.add_argument('--train_prop', type=float, default=1.0)
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
