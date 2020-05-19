@@ -19,7 +19,7 @@ from collections import defaultdict
 
 from data.loader import DataLoader
 from model.trainer import GCNTrainer
-from utils import torch_utils, scorer, semeval_constant as constant, helper
+from utils import torch_utils, scorer, constant as constant, helper
 from utils.vocab import Vocab
 
 
