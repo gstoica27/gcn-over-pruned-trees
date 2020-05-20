@@ -336,7 +336,10 @@ class GCN(nn.Module):
                 ########################################################################################################
                 if self.opt['deprel_self_loop']:
                     # [1,D]
-                    self_loop_emb = self.deprel_emb(torch.ones((1, 1)). type(torch.LongTensor) * constant.SELF_LOOP_INDEX)
+                    self_loop_lookup = torch.ones((1, 1)). type(torch.LongTensor) * constant.SELF_LOOP_INDEX
+                    if self.opt['cuda']:
+                        self_loop_lookup = self_loop_lookup.cuda()
+                    self_loop_emb = self.deprel_emb(self_loop_lookup)
                     # [B,N,H]
                     self_loop_encs = self.traverse_self_loop(token_encs=gcn_inputs,
                                                              self_loop_emb=self_loop_emb,
