@@ -32,6 +32,9 @@ class GCNClassifier(nn.Module):
     def get_deprel_emb(self):
         return self.gcn_model.get_deprel_embedding()
 
+    def get_gcn_parameters(self):
+        return self.gcn_model.get_gcn_parameters()
+
 class GCNRelationModel(nn.Module):
     def __init__(self, opt, emb_matrix=None):
         super().__init__()
@@ -109,13 +112,6 @@ class GCNRelationModel(nn.Module):
         h, pool_mask = self.gcn(adj, inputs)
         # pooling
         subj_mask, obj_mask = subj_pos.eq(0).eq(0).unsqueeze(2), obj_pos.eq(0).eq(0).unsqueeze(2) # invert mask
-        # subj_mask = subj_mask[:, :h.shape[1]]
-        # obj_mask = obj_mask[:, :h.shape[1]]
-        # pool_mask = pool_mask[:, :h.shape[1]]
-        # subj_mask = subj_pos.eq(0).unsqueeze(2)
-        # obj_mask = obj_pos.eq(0).unsqueeze(2)
-        # pool_mask = torch.logical_xor(pool_mask.eq(0), (subj_mask + obj_mask))
-        # subj_mask, obj_mask, pool_mask = subj_mask.eq(0),  obj_mask.eq(0), pool_mask.eq(0)
         pool_type = self.opt['pooling']
         h_out = pool(h, pool_mask, type=pool_type)
         subj_out = pool(h, subj_mask, type=pool_type)
@@ -123,6 +119,9 @@ class GCNRelationModel(nn.Module):
         outputs = torch.cat([h_out, subj_out, obj_out], dim=1)
         outputs = self.out_mlp(outputs)
         return outputs, h_out
+
+    def get_gcn_parameters(self):
+        return self.gcn.get_gcn_parameters()
 
 class GCN(nn.Module):
     """ A GCN/Contextualized GCN module operated on dependency graphs. """
@@ -256,8 +255,9 @@ class GCN(nn.Module):
                 outer_product = torch.einsum('ijk,ija->ijka', deprel_emb, gcn_inputs)               # [B,T,D]x[B,T,H]->[B,T,D,H]
                 deprel_gcn_vector = torch.einsum('abcd,cde->abe', outer_product, weight_l)          # [B,T,D,H]x[D,H,H]->[B,T,H]
                 deprel_gcn_bias = torch.einsum('abc,ce->abe', deprel_emb, bias_l)                   # [B,T,D]x[D,H]->[B,T,H]
-                xW = deprel_gcn_vector + deprel_gcn_bias                                            # [B,T,H]
-                AxW = adj_matrix.bmm(xW)                                                            # [B,T1,T2]x[B,T2,H]->[B,T1,H]
+                xW = deprel_gcn_vector                                                              # [B,T,H]
+                xW_b = xW + deprel_gcn_bias * denom
+                AxW = adj_matrix.bmm(xW_b)                                                          # [B,T1,T2]x[B,T2,H]->[B,T1,H]
                 AxW = AxW + xW                                                                      # [B,T1,H]
 
             elif self.opt['adj_type'] == 'concat_deprel':
@@ -281,6 +281,9 @@ class GCN(nn.Module):
             gcn_inputs = self.gcn_drop(gAxW) if l < self.layers - 1 else gAxW
 
         return gcn_inputs, mask
+
+    def get_gcn_parameters(self):
+        return self.W
 
 def pool(h, mask, type='max'):
     if type == 'max':
