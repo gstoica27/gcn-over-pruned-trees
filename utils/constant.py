@@ -8,7 +8,13 @@ PAD_TOKEN = '<PAD>'
 PAD_ID = 0
 UNK_TOKEN = '<UNK>'
 UNK_ID = 1
-
+# self loop relation for dependency tree integration
+SELF_LOOP = 'self_loop'
+# dependency relation index limit for forward relations
+DEPREL_FORWARD_BOUND = 42
+# dependency relation index limit for reverse relations
+DEPREL_REVERSE_BOUND = 84
+SELF_LOOP_INDEX = 84
 VOCAB_PREFIX = [PAD_TOKEN, UNK_TOKEN]
 
 # hard-coded mappings from fields to ids
@@ -20,7 +26,7 @@ NER_TO_ID = {PAD_TOKEN: 0, UNK_TOKEN: 1, 'O': 2, 'PERSON': 3, 'ORGANIZATION': 4,
 
 POS_TO_ID = {PAD_TOKEN: 0, UNK_TOKEN: 1, 'NNP': 2, 'NN': 3, 'IN': 4, 'DT': 5, ',': 6, 'JJ': 7, 'NNS': 8, 'VBD': 9, 'CD': 10, 'CC': 11, '.': 12, 'RB': 13, 'VBN': 14, 'PRP': 15, 'TO': 16, 'VB': 17, 'VBG': 18, 'VBZ': 19, 'PRP$': 20, ':': 21, 'POS': 22, '\'\'': 23, '``': 24, '-RRB-': 25, '-LRB-': 26, 'VBP': 27, 'MD': 28, 'NNPS': 29, 'WP': 30, 'WDT': 31, 'WRB': 32, 'RP': 33, 'JJR': 34, 'JJS': 35, '$': 36, 'FW': 37, 'RBR': 38, 'SYM': 39, 'EX': 40, 'RBS': 41, 'WP$': 42, 'PDT': 43, 'LS': 44, 'UH': 45, '#': 46}
 
-DEPREL_TO_ID = {PAD_TOKEN: 0, UNK_TOKEN: 1, 'punct': 2, 'compound': 3, 'case': 4, 'nmod': 5, 'det': 6, 'nsubj': 7, 'amod': 8, 'conj': 9, 'dobj': 10, 'ROOT': 11, 'cc': 12, 'nmod:poss': 13, 'mark': 14, 'advmod': 15, 'appos': 16, 'nummod': 17, 'dep': 18, 'ccomp': 19, 'aux': 20, 'advcl': 21, 'acl:relcl': 22, 'xcomp': 23, 'cop': 24, 'acl': 25, 'auxpass': 26, 'nsubjpass': 27, 'nmod:tmod': 28, 'neg': 29, 'compound:prt': 30, 'mwe': 31, 'parataxis': 32, 'root': 33, 'nmod:npmod': 34, 'expl': 35, 'csubj': 36, 'cc:preconj': 37, 'iobj': 38, 'det:predet': 39, 'discourse': 40, 'csubjpass': 41, '<PAD>_reverse': 43, '<UNK>_reverse': 43, 'punct_reverse': 44, 'compound_reverse': 45, 'case_reverse': 46, 'nmod_reverse': 47, 'det_reverse': 48, 'nsubj_reverse': 49, 'amod_reverse': 50, 'conj_reverse': 51, 'dobj_reverse': 52, 'ROOT_reverse': 53, 'cc_reverse': 54, 'nmod:poss_reverse': 55, 'mark_reverse': 56, 'advmod_reverse': 57, 'appos_reverse': 58, 'nummod_reverse': 59, 'dep_reverse': 60, 'ccomp_reverse': 61, 'aux_reverse': 62, 'advcl_reverse': 63, 'acl:relcl_reverse': 64, 'xcomp_reverse': 65, 'cop_reverse': 66, 'acl_reverse': 67, 'auxpass_reverse': 68, 'nsubjpass_reverse': 69, 'nmod:tmod_reverse': 70, 'neg_reverse': 71, 'compound:prt_reverse': 72, 'mwe_reverse': 73, 'parataxis_reverse': 74, 'root_reverse': 75, 'nmod:npmod_reverse': 76, 'expl_reverse': 77, 'csubj_reverse': 78, 'cc:preconj_reverse': 79, 'iobj_reverse': 80, 'det:predet_reverse': 81, 'discourse_reverse': 82, 'csubjpass_reverse': 83, '<PAD>_reverse_reverse': 84}
+DEPREL_TO_ID = {PAD_TOKEN: 0, UNK_TOKEN: 1, 'punct': 2, 'compound': 3, 'case': 4, 'nmod': 5, 'det': 6, 'nsubj': 7, 'amod': 8, 'conj': 9, 'dobj': 10, 'ROOT': 11, 'cc': 12, 'nmod:poss': 13, 'mark': 14, 'advmod': 15, 'appos': 16, 'nummod': 17, 'dep': 18, 'ccomp': 19, 'aux': 20, 'advcl': 21, 'acl:relcl': 22, 'xcomp': 23, 'cop': 24, 'acl': 25, 'auxpass': 26, 'nsubjpass': 27, 'nmod:tmod': 28, 'neg': 29, 'compound:prt': 30, 'mwe': 31, 'parataxis': 32, 'root': 33, 'nmod:npmod': 34, 'expl': 35, 'csubj': 36, 'cc:preconj': 37, 'iobj': 38, 'det:predet': 39, 'discourse': 40, 'csubjpass': 41, '<PAD>_reverse': 42, '<UNK>_reverse': 43, 'punct_reverse': 44, 'compound_reverse': 45, 'case_reverse': 46, 'nmod_reverse': 47, 'det_reverse': 48, 'nsubj_reverse': 49, 'amod_reverse': 50, 'conj_reverse': 51, 'dobj_reverse': 52, 'ROOT_reverse': 53, 'cc_reverse': 54, 'nmod:poss_reverse': 55, 'mark_reverse': 56, 'advmod_reverse': 57, 'appos_reverse': 58, 'nummod_reverse': 59, 'dep_reverse': 60, 'ccomp_reverse': 61, 'aux_reverse': 62, 'advcl_reverse': 63, 'acl:relcl_reverse': 64, 'xcomp_reverse': 65, 'cop_reverse': 66, 'acl_reverse': 67, 'auxpass_reverse': 68, 'nsubjpass_reverse': 69, 'nmod:tmod_reverse': 70, 'neg_reverse': 71, 'compound:prt_reverse': 72, 'mwe_reverse': 73, 'parataxis_reverse': 74, 'root_reverse': 75, 'nmod:npmod_reverse': 76, 'expl_reverse': 77, 'csubj_reverse': 78, 'cc:preconj_reverse': 79, 'iobj_reverse': 80, 'det:predet_reverse': 81, 'discourse_reverse': 82, 'csubjpass_reverse': 83, SELF_LOOP: 84}
 
 NEGATIVE_LABEL = 'no_relation'
 

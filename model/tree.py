@@ -11,6 +11,7 @@ from utils.constant import DEPREL_TO_ID
 # vocab = Vocab(vocab_file, load=True)
 # id2vocab = {v:k for (k,v) in vocab.word2id.items()}
 # id2deprel = {v:k for (k,v) in DEPREL_TO_ID.items()}
+import utils.constant as constant
 
 class Tree(object):
     """
@@ -30,7 +31,7 @@ class Tree(object):
         if getattr(self,'_size'):
             return self._size
         count = 1
-        for i in xrange(self.num_children):
+        for i in range(self.num_children):
             count += self.children[i].size()
         self._size = count
         return self._size
@@ -40,7 +41,7 @@ class Tree(object):
             return self._depth
         count = 0
         if self.num_children>0:
-            for i in xrange(self.num_children):
+            for i in range(self.num_children):
                 child_depth = self.children[i].depth()
                 if child_depth>count:
                     count = child_depth
@@ -182,10 +183,11 @@ def tree_to_adj(sent_len, tree, directed=True, self_loop=False):
             # Add reverse relation
             if not directed:
                 # 42 is the added constant to obtain reverse id
-                ret[c.idx, t.idx] = c.deprel + 42
+                ret[c.idx, t.idx] = c.deprel + constant.DEPREL_FORWARD_BOUND
 
-        if self_loop and DEPREL_TO_ID['ROOT'] == t.deprel:
-            ret[t.idx, t.idx] = t.deprel
+            if self_loop:
+                ret[t.idx, t.idx] = constant.DEPREL_TO_ID[constant.SELF_LOOP]
+                ret[c.idx, c.idx] = constant.DEPREL_TO_ID[constant.SELF_LOOP]
         seen_deprels.append(t.deprel)
         seen_head.append(t.head)
         queue += t.children

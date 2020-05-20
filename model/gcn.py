@@ -101,7 +101,7 @@ class GCNRelationModel(nn.Module):
             head, words, subj_pos, obj_pos = head.cpu().numpy(), words.cpu().numpy(), subj_pos.cpu().numpy(), obj_pos.cpu().numpy()
             deprel = deprel.cpu().numpy()
             trees = [head_to_tree(head[i], words[i], l[i], prune, subj_pos[i], obj_pos[i], deprel[i]) for i in range(len(l))]
-            adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=False).reshape(1, maxlen, maxlen) for tree in trees]
+            adj = [tree_to_adj(maxlen, tree, directed=False, self_loop=True).reshape(1, maxlen, maxlen) for tree in trees]
             adj = np.concatenate(adj, axis=0)
             adj = torch.from_numpy(adj)
             # return adj.cuda() if self.opt['cuda'] else Variable(adj)
@@ -264,7 +264,7 @@ class GCN(nn.Module):
         mask = (adj_matrix.sum(2) + adj_matrix.sum(1)).eq(0).unsqueeze(2)
         if self.opt['deprel_attn']:
             # [B,T,D]x[D,1]->[B,T,1]->[B,T]->[B,1,T]->[B,T,T]
-            deprel_attn = self.attn_proj(deprel_emb).squeeze().unsqueeze(1).repeat((1, max_len, 1))
+            deprel_attn = self.attn_proj(deprel_emb).permute(0, 2, 1).repeat((1, max_len, 1))
             adj_matrix = self.masked_softmax(deprel_attn, adj_matrix) * adj_matrix
         # zero out adj for ablation
         if self.opt.get('no_adj', False):
@@ -286,15 +286,63 @@ class GCN(nn.Module):
                 AxW = self.W[l](Ax)
                 AxW = AxW + self.W[l](gcn_inputs)  # self loop
             elif self.opt['adj_type'] == 'full_deprel':
-                weight_l = self.W[l].weight.reshape((self.opt['deprel_emb_dim'], -1, self.mem_dim)) # [D,H,H]
-                bias_l = self.W[l].bias.reshape((self.opt['deprel_emb_dim'], self.mem_dim))         # [D,H]
-                outer_product = torch.einsum('ijk,ija->ijka', deprel_emb, gcn_inputs)               # [B,T,D]x[B,T,H]->[B,T,D,H]
-                deprel_gcn_vector = torch.einsum('abcd,cde->abe', outer_product, weight_l)          # [B,T,D,H]x[D,H,H]->[B,T,H]
-                deprel_gcn_bias = torch.einsum('abc,ce->abe', deprel_emb, bias_l)                   # [B,T,D]x[D,H]->[B,T,H]
-                xW = deprel_gcn_vector                                                              # [B,T,H]
-                xW_b = xW + deprel_gcn_bias * denom
-                AxW = adj_matrix.bmm(xW_b)                                                          # [B,T1,T2]x[B,T2,H]->[B,T1,H]
-                AxW = AxW + xW                                                                      # [B,T1,H]
+                ########################################################################################################
+                ########################################## Weight Extractions ##########################################
+                ########################################################################################################
+                # [D,T,H]
+                weight_l = self.W[l].weight.reshape((self.opt['deprel_emb_dim'], -1, self.mem_dim))
+                # [D, H]
+                bias_l = self.W[l].bias.reshape((self.opt['deprel_emb_dim'], self.mem_dim))
+                ########################################################################################################
+                ######################### Forward Dependency Relation Traversal and Aggregation ########################
+                ########################################################################################################
+                # Extract all dependency relations that are children of current node
+                forward_adj_matrix = torch.where((0 < adj) * (adj < constant.DEPREL_FORWARD_BOUND),
+                                                 torch.ones_like(adj),
+                                                 torch.zeros_like(adj)).\
+                    type(torch.float32)
+                # [B,N,D]
+                forward_deprel_embs = self.deprel_emb(deprel)
+                # [B,N,H]
+                forward_encs = self.traverse_deprel(token_encs=gcn_inputs,
+                                                    deprel_embs=forward_deprel_embs,
+                                                    weight=weight_l,
+                                                    bias=bias_l)
+                # [B,N,N]x[B,N,H]->[B,N,H]
+                forward_combined = forward_adj_matrix.bmm(forward_encs)
+                AxW = forward_combined
+                ########################################################################################################
+                ######################### Reverse Dependency Relation Traversal and Aggregation ########################
+                ########################################################################################################
+                # Extract all dependency relations that are parents of current node. These are reverse connections
+                if not self.opt['deprel_directed']:
+                    reverse_adj_matrix = torch.where(
+                        (constant.DEPREL_FORWARD_BOUND < adj) * (adj < constant.DEPREL_REVERSE_BOUND),
+                        torch.ones_like(adj),
+                        torch.zeros_like(adj)).\
+                            type(torch.float32)
+                    # [B,N,D]
+                    reverse_deprel_embs = self.deprel_emb(deprel + constant.DEPREL_FORWARD_BOUND)
+                    # [B,N,H]
+                    reverse_encs = self.traverse_deprel(token_encs=gcn_inputs,
+                                                        deprel_embs=reverse_deprel_embs,
+                                                        weight=weight_l,
+                                                        bias=bias_l)
+                    # [B,N,N]x[B,N,H]->[B,N,H]
+                    reverse_commbined = reverse_adj_matrix.bmm(reverse_encs)
+                    AxW += reverse_commbined
+                ########################################################################################################
+                ########################################## Self Loop Traversal #########################################
+                ########################################################################################################
+                if self.opt['deprel_self_loop']:
+                    # [1,D]
+                    self_loop_emb = self.deprel_emb(torch.ones((1, 1)). type(torch.LongTensor) * constant.SELF_LOOP_INDEX)
+                    # [B,N,H]
+                    self_loop_encs = self.traverse_self_loop(token_encs=gcn_inputs,
+                                                             self_loop_emb=self_loop_emb,
+                                                             weight=weight_l,
+                                                             bias=bias_l)
+                    AxW += self_loop_encs
 
             elif self.opt['adj_type'] == 'concat_deprel':
                 # [B,T1,H]
@@ -320,6 +368,42 @@ class GCN(nn.Module):
 
     def get_gcn_parameters(self):
         return self.W
+
+    def traverse_deprel(self, token_encs, deprel_embs, weight, bias):
+        """
+        Traverse dependency relation edges simultaneously.
+        :param token_encs: Token embeddings | [B,N,T]
+        :param deprel_embs: Deprel embeddings | [B,N,D]
+        :param weight: Weight tensor | [D,T,H]
+        :param bias: Bias tensor | [D,H]
+        :return: deprel transformed encodings | [B,N,H]
+        """
+        # [B,N,D]o[B,N,T]->[B,N,D,T]
+        deprel_op = torch.einsum('ijk,ijl->ijkl', deprel_embs, token_encs)
+        # [B,N,D,T]x[D,T,H]->[B,N,H]
+        deprel_transformed = torch.einsum('abcd,cde->abe', deprel_op, weight)
+        deprel_bias = torch.einsum('ijk,kl->ijl', deprel_embs, bias)
+        deprel_traversed = deprel_transformed + deprel_bias
+        return deprel_traversed
+
+    def traverse_self_loop(self, token_encs, self_loop_emb, weight, bias):
+        """
+        Traverse self loop relation
+        :param token_encs:  Token embeddings | [B,N,T]
+        :param self_loop_emb: Self loop embedding | [1,D]
+        :param weight: Weight tensor | [D,T,H]
+        :param bias: Bias tensor | [D,H]
+        :return: Self loop traversed tensor | [B,N,H]
+        """
+        self_loop_emb = self_loop_emb.squeeze(0)
+        # [1,D]x[D,T,H]->[1,T,H]->[T,H]
+        sl_weight = torch.einsum('ij,jkl->ikl', self_loop_emb, weight).squeeze(0)
+        # [B,N,T]x[T,H]->[B,N,H]
+        sl_transformed = torch.einsum('ijk,kl->ijl', token_encs, sl_weight)
+        # [1,D]x[D,H]->[1,H]->[1,1,H]
+        sl_bias = torch.einsum('ij,jk->ik', self_loop_emb, bias).unsqueeze(0)
+        sl_traversed = sl_transformed + sl_bias
+        return sl_traversed
 
 def pool(h, mask, type='max'):
     if type == 'max':
