@@ -46,7 +46,7 @@ class GCNRelationModel(nn.Module):
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
         self.deprel_side = opt['deprel_emb_dim'] ## set equal to hidden_dim mostly
-        if opt['adj_type'] != 'regular':
+        if opt['adj_type'] != 'regular' or opt['deprel_attn']:
             deprel_emb_dim = self.deprel_side
         # regular adjacency matrix, thus fill with dummy weight
         else:
