@@ -250,7 +250,7 @@ class GCN(nn.Module):
             # Encode parameters for deprel changes
             gcn_inputs = self.preprocessor(gcn_inputs)
         batch_size, max_len, encoding_dim = gcn_inputs.shape
-        if self.opt['adj_type'] == 'full_deprel' or self.top['deprel_attn']:
+        if self.opt['adj_type'] == 'full_deprel' or self.opt['deprel_attn']:
             deprel_emb = self.deprel_emb(deprel)
         elif self.opt['adj_type'] != 'regular':
             deprel_adj = self.deprel_emb(adj.type(torch.int64)) # [B,T,T,H]
