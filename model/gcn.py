@@ -168,6 +168,9 @@ class GCN(nn.Module):
                     self.deprel_dropout = nn.Dropout(opt.get('deprel_dropout', 0.0))
                 self.W.append(nn.Linear(input_dim,  self.mem_dim))
 
+        if opt['deprel_attn']:
+            self.attn_proj = nn.Linear(opt['deprel_emb_dim'], 1, bias=False)
+
     def conv_l2(self):
         conv_weights = []
         for w in self.W:
@@ -186,6 +189,36 @@ class GCN(nn.Module):
         rnn_outputs, (ht, ct) = self.rnn(rnn_inputs, (h0, c0))
         rnn_outputs, _ = nn.utils.rnn.pad_packed_sequence(rnn_outputs, batch_first=True)
         return rnn_outputs
+
+    def masked_softmax(self, vector: torch.Tensor, mask: torch.Tensor, dim: int = -1) -> torch.Tensor:
+        """
+        ``torch.nn.functional.log_softmax(vector)`` does not work if some elements of ``vector`` should be
+        masked.  This performs a log_softmax on just the non-masked portions of ``vector``.  Passing
+        ``None`` in for the mask is also acceptable; you'll just get a regular log_softmax.
+        ``vector`` can have an arbitrary number of dimensions; the only requirement is that ``mask`` is
+        broadcastable to ``vector's`` shape.  If ``mask`` has fewer dimensions than ``vector``, we will
+        unsqueeze on dimension 1 until they match.  If you need a different unsqueezing of your mask,
+        do it yourself before passing the mask into this function.
+        In the case that the input vector is completely masked, the return value of this function is
+        arbitrary, but not ``nan``.  You should be masking the result of whatever computation comes out
+        of this in that case, anyway, so the specific values returned shouldn't matter.  Also, the way
+        that we deal with this case relies on having single-precision floats; mixing half-precision
+        floats with fully-masked vectors will likely give you ``nans``.
+        If your logits are all extremely negative (i.e., the max value in your logit vector is -50 or
+        lower), the way we handle masking here could mess you up.  But if you've got logit values that
+        extreme, you've got bigger problems than this.
+        """
+        if mask is not None:
+            mask = mask.float()
+            while mask.dim() < vector.dim():
+                mask = mask.unsqueeze(1)
+            # vector + mask.log() is an easy way to zero out masked elements in logspace, but it
+            # results in nans when the whole vector is masked.  We need a very small value instead of a
+            # zero in the mask for these cases.  log(1 + 1e-45) is still basically 0, so we can safely
+            # just add 1e-45 before calling mask.log().  We use 1e-45 because 1e-46 is so small it
+            # becomes 0 - this is just the smallest value we can actually use.
+            vector = vector + (mask + 1e-45).log()
+        return torch.nn.functional.softmax(vector, dim=dim)
 
     def forward(self, adj, inputs):
         if self.opt['dataset'] == 'tacred':
@@ -217,7 +250,7 @@ class GCN(nn.Module):
             # Encode parameters for deprel changes
             gcn_inputs = self.preprocessor(gcn_inputs)
         batch_size, max_len, encoding_dim = gcn_inputs.shape
-        if self.opt['adj_type'] == 'full_deprel':
+        if self.opt['adj_type'] == 'full_deprel' or self.top['deprel_attn']:
             deprel_emb = self.deprel_emb(deprel)
         elif self.opt['adj_type'] != 'regular':
             deprel_adj = self.deprel_emb(adj.type(torch.int64)) # [B,T,T,H]
@@ -225,11 +258,14 @@ class GCN(nn.Module):
         else:
             batch_size, max_len, encoding_dim = gcn_inputs.shape
             deprel_adj = None
-
         # gcn layer
         adj_matrix = torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj)).type(torch.float32)
         denom = adj_matrix.sum(2).unsqueeze(2) + 1
         mask = (adj_matrix.sum(2) + adj_matrix.sum(1)).eq(0).unsqueeze(2)
+        if self.opt['deprel_attn']:
+            # [B,T,D]x[D,1]->[B,T,1]->[B,T]->[B,1,T]->[B,T,T]
+            deprel_attn = self.attn_proj(deprel_emb).squeeze().unsqueeze(1).repeat((1, max_len, 1))
+            adj_matrix = self.masked_softmax(deprel_attn, adj_matrix) * adj_matrix
         # zero out adj for ablation
         if self.opt.get('no_adj', False):
             adj_matrix = torch.zeros_like(adj_matrix)
