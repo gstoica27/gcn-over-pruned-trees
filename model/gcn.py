@@ -151,7 +151,7 @@ class GCN(nn.Module):
         if opt['adj_type'] in ['diagonal_deprel']:
             self.preprocessor = nn.Linear(self.in_dim, self.mem_dim)
             self.in_dim = self.mem_dim
-        elif opt['adj_type'] == 'full_deprel':
+        elif opt['adj_type'] in ['full_deprel', 'regular']:
             self.W = nn.ModuleList()
             for layer in range(self.layers):
                 input_dim = opt['deprel_emb_dim']
@@ -275,9 +275,78 @@ class GCN(nn.Module):
         for l in range(self.layers):
             if self.opt['adj_type'] == 'regular':
                 # [B,T1,T2] x [B,T2,H] -> [B,T1,H]
-                Ax = adj_matrix.bmm(gcn_inputs)
-                AxW = self.W[l](Ax)
-                AxW = AxW + self.W[l](gcn_inputs)  # self loop
+                # Ax = adj_matrix.bmm(gcn_inputs)
+                # AxW = self.W[l](Ax)
+                # AxW = AxW + self.W[l](gcn_inputs)  # self loop
+
+                ########################################################################################################
+                ########################################## Weight Extractions ##########################################
+                ########################################################################################################
+                # [D,T,H]
+                weight_l = self.W[l].weight.reshape((self.opt['deprel_emb_dim'], -1, self.mem_dim))
+                # [D, H]
+                bias_l = self.W[l].bias.reshape((self.opt['deprel_emb_dim'], self.mem_dim))
+                ########################################################################################################
+                ######################### Forward Dependency Relation Traversal and Aggregation ########################
+                ########################################################################################################
+                # Extract all dependency relations that are children of current node
+                forward_adj_matrix = torch.where((0 < adj) * (adj < constant.DEPREL_FORWARD_BOUND),
+                                                 torch.ones_like(adj),
+                                                 torch.zeros_like(adj)). \
+                    type(torch.float32)
+                # [B,N,D]
+                forward_deprel_embs = torch.ones((batch_size, max_len, self.opt['deprel_emb_dim']))
+                if self.opt['cuda']:
+                    forward_deprel_embs = forward_deprel_embs.cuda()
+                # [B,N,H]
+                forward_encs = self.traverse_deprel(token_encs=gcn_inputs,
+                                                    deprel_embs=forward_deprel_embs,
+                                                    weight=weight_l,
+                                                    bias=bias_l)
+                # [B,N,N]x[B,N,H]->[B,N,H]
+                forward_combined = forward_adj_matrix.bmm(forward_encs)
+                AxW = forward_combined
+                ########################################################################################################
+                ######################### Reverse Dependency Relation Traversal and Aggregation ########################
+                ########################################################################################################
+                # Extract all dependency relations that are parents of current node. These are reverse connections
+                if not self.opt['deprel_directed']:
+                    reverse_adj_matrix = torch.where(
+                        (constant.DEPREL_FORWARD_BOUND < adj) * (adj < constant.DEPREL_REVERSE_BOUND),
+                        torch.ones_like(adj),
+                        torch.zeros_like(adj)). \
+                        type(torch.float32)
+                    # [B,N,D]
+                    # reverse_deprel_embs = self.deprel_emb(deprel + constant.DEPREL_FORWARD_BOUND)
+                    reverse_deprel_embs = torch.ones((batch_size, max_len, self.opt['deprel_emb_dim']))
+                    if self.opt['cuda']:
+                        reverse_deprel_embs = reverse_deprel_embs.cuda()
+                    # [B,N,H]
+                    reverse_encs = self.traverse_deprel(token_encs=gcn_inputs,
+                                                        deprel_embs=reverse_deprel_embs,
+                                                        weight=weight_l,
+                                                        bias=bias_l)
+                    # [B,N,N]x[B,N,H]->[B,N,H]
+                    reverse_commbined = reverse_adj_matrix.bmm(reverse_encs)
+                    AxW += reverse_commbined
+                ########################################################################################################
+                ########################################## Self Loop Traversal #########################################
+                ########################################################################################################
+                if self.opt['deprel_self_loop']:
+                    # [1,D]
+                    # self_loop_lookup = torch.ones((1, 1)).type(torch.LongTensor) * constant.SELF_LOOP_INDEX
+                    # if self.opt['cuda']:
+                    #     self_loop_lookup = self_loop_lookup.cuda()
+                    # self_loop_emb = self.deprel_emb(self_loop_lookup)
+                    self_loop_emb = torch.ones((1, 1, self.opt['deprel_emb_dim']))
+                    if self.opt['cuda']:
+                        self_loop_emb = self_loop_emb.cuda()
+                    # [B,N,H]
+                    self_loop_encs = self.traverse_self_loop(token_encs=gcn_inputs,
+                                                             self_loop_emb=self_loop_emb,
+                                                             weight=weight_l,
+                                                             bias=bias_l)
+                    AxW += self_loop_encs
             elif self.opt['adj_type'] == 'diagonal_deprel':
                 # [B,T1,H] -> [B,1,T2,H]
                 layer_inputs = gcn_inputs.view((batch_size, 1, max_len, encoding_dim))
