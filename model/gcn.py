@@ -374,6 +374,11 @@ class GCN(nn.Module):
                 forward_adj_matrix = self.maybe_drop_edges(forward_adj_matrix)
                 # [B,N,D]
                 forward_deprel_embs = self.deprel_emb(deprel)
+                forward_ones = torch.ones((batch_size, max_len, self.opt['deprel_emb_dim']))
+                if self.opt['cuda']:
+                    forward_ones = forward_ones.cuda()
+                deprel_alpha = self.opt.get('deprel_alpha', 1.0)
+                forward_deprel_embs = forward_deprel_embs * deprel_alpha + (1 - deprel_alpha) * forward_ones
                 # [B,N,H]
                 forward_encs = self.traverse_deprel(token_encs=gcn_inputs,
                                                     deprel_embs=forward_deprel_embs,
@@ -396,6 +401,10 @@ class GCN(nn.Module):
                     reverse_adj_matrix = self.maybe_drop_edges(reverse_adj_matrix)
                     # [B,N,D]
                     reverse_deprel_embs = self.deprel_emb(deprel + constant.DEPREL_FORWARD_BOUND)
+                    reverse_ones = torch.ones((batch_size, max_len, self.opt['deprel_emb_dim']))
+                    if self.opt['cuda']:
+                        reverse_ones = reverse_ones.cuda()
+                    reverse_deprel_embs = reverse_deprel_embs * deprel_alpha + (1 - deprel_alpha) * reverse_ones
                     # [B,N,H]
                     reverse_encs = self.traverse_deprel(token_encs=gcn_inputs,
                                                         deprel_embs=reverse_deprel_embs,
