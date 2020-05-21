@@ -374,6 +374,9 @@ class GCN(nn.Module):
                 forward_adj_matrix = self.maybe_drop_edges(forward_adj_matrix)
                 # [B,N,D]
                 forward_deprel_embs = self.deprel_emb(deprel)
+                # Maybe forget dependency relation embeddings
+                forward_deprel_embs = self.maybe_forget_deprels(forward_deprel_embs)
+                # Mix between dependency relation and no-relation on all edges
                 forward_ones = torch.ones((batch_size, max_len, self.opt['deprel_emb_dim']))
                 if self.opt['cuda']:
                     forward_ones = forward_ones.cuda()
@@ -401,6 +404,8 @@ class GCN(nn.Module):
                     reverse_adj_matrix = self.maybe_drop_edges(reverse_adj_matrix)
                     # [B,N,D]
                     reverse_deprel_embs = self.deprel_emb(deprel + constant.DEPREL_FORWARD_BOUND)
+                    # Maybe forget dependency relation embeddings
+                    reverse_deprel_embs = self.maybe_forget_deprels(reverse_deprel_embs)
                     reverse_ones = torch.ones((batch_size, max_len, self.opt['deprel_emb_dim']))
                     if self.opt['cuda']:
                         reverse_ones = reverse_ones.cuda()
@@ -411,8 +416,8 @@ class GCN(nn.Module):
                                                         weight=weight_l,
                                                         bias=bias_l)
                     # [B,N,N]x[B,N,H]->[B,N,H]
-                    reverse_commbined = reverse_adj_matrix.bmm(reverse_encs)
-                    AxW += reverse_commbined
+                    reverse_combined = reverse_adj_matrix.bmm(reverse_encs)
+                    AxW += reverse_combined
                 ########################################################################################################
                 ########################################## Self Loop Traversal #########################################
                 ########################################################################################################
@@ -504,6 +509,28 @@ class GCN(nn.Module):
             return remain_adj_matrix
         else:
             return adj_matrix
+
+    def maybe_forget_deprels(self, deprel_embs):
+        """
+        Randomly remove dependency relations if desired. Note: removing a dependency relation does not
+        imply zeroing out its embeddings. Instead, it means the masked out relations are replaced with
+        a 1-vector. This is because 0-vectors would also remove the edge.
+        :param deprel_embs: Dependency relation embeddings | [B,N,D]
+        :return: Masked out dependency relation embeddings | [B,N,D]
+        """
+        keep_prop = self.opt.get('deprel_keep_prop', 1.0)
+        if self.training and keep_prop < 1.0:
+            batch_size, num_token, emb_dim = deprel_embs.shape
+            po_deprels = torch.empty((batch_size, num_token, 1), requires_grad=False).\
+                bernoulli_(keep_prop).\
+                repeat(1, 1, emb_dim)
+            if self.opt['cuda']:
+                po_embs = torch.where(po_deprels.cuda(), deprel_embs, torch.ones_like(deprel_embs).cuda())
+            else:
+                po_embs = torch.where(po_deprels == 1, deprel_embs, torch.ones_like(deprel_embs))
+            return po_embs
+        return deprel_embs
+
 
 def pool(h, mask, type='max'):
     if type == 'max':

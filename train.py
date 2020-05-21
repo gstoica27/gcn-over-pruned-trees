@@ -105,8 +105,14 @@ parser.add_argument('--use_bert_embeddings', type=str2bool, default=False)
 parser.add_argument('--emb_dropout', type=float, default=.0)
 parser.add_argument('--dataset', type=str, default='tacred')
 parser.add_argument('--deprel_attn', type=str2bool, default=False)
-parser.add_argument('--edge_keep_prob', type=float, default=1.0)
 parser.add_argument('--deprel_alpha', type=float, default=1.0)
+# Probability that we lose the connection between a parent and a child
+parser.add_argument('--edge_keep_prob', type=float, default=1.0)
+# Probability that we "forget" the dependency relation between a parent and child.
+# Note the difference between edge_keep_prob: while edge_keep_prob loses the edge
+# and the dependency relation, deprel_keep_prop keeps the edge while losing the
+# dependence relation.
+parser.add_argument('--deprel_keep_prop', type=float, default=1.0)
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
@@ -146,7 +152,7 @@ if opt['use_bert_embeddings']:
 else:
     id2embeddings = None
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + '/train_0.1.json', opt['batch_size'], opt,
+train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt,
                          vocab, evaluation=False, bert_embeddings=id2embeddings)
 dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt,
                        vocab, evaluation=True, bert_embeddings=id2embeddings)
