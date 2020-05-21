@@ -525,7 +525,7 @@ class GCN(nn.Module):
                 bernoulli_(keep_prop).\
                 repeat(1, 1, emb_dim)
             if self.opt['cuda']:
-                po_embs = torch.where(po_deprels.cuda(), deprel_embs, torch.ones_like(deprel_embs).cuda())
+                po_embs = torch.where((po_deprels == 1).cuda(), deprel_embs, torch.ones_like(deprel_embs).cuda())
             else:
                 po_embs = torch.where(po_deprels == 1, deprel_embs, torch.ones_like(deprel_embs))
             return po_embs
