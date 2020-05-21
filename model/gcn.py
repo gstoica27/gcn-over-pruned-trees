@@ -370,6 +370,8 @@ class GCN(nn.Module):
                                                  torch.ones_like(adj),
                                                  torch.zeros_like(adj)).\
                     type(torch.float32)
+                # Maybe randomly drop edges
+                forward_adj_matrix = self.maybe_drop_edges(forward_adj_matrix)
                 # [B,N,D]
                 forward_deprel_embs = self.deprel_emb(deprel)
                 # [B,N,H]
@@ -390,6 +392,8 @@ class GCN(nn.Module):
                         torch.ones_like(adj),
                         torch.zeros_like(adj)).\
                             type(torch.float32)
+                    # Maybe drop edges randomly
+                    reverse_adj_matrix = self.maybe_drop_edges(reverse_adj_matrix)
                     # [B,N,D]
                     reverse_deprel_embs = self.deprel_emb(deprel + constant.DEPREL_FORWARD_BOUND)
                     # [B,N,H]
@@ -476,6 +480,21 @@ class GCN(nn.Module):
         sl_bias = torch.einsum('ij,jk->ik', self_loop_emb, bias).unsqueeze(0)
         sl_traversed = sl_transformed + sl_bias
         return sl_traversed
+
+    def maybe_drop_edges(self, adj_matrix):
+        """
+        Randomly mask out dependency tree connections if desired,
+        :param adj_matrix: Adjacency matrix representing parent to child connections | [B,N,N]
+        :return: Masked adjacency matrix | [B,N,N]
+        """
+        if self.training and self.opt.get('edge_keep_prob', 1.0) < 1.0:
+            keep_edges = torch.empty_like(adj_matrix, requires_grad=False).bernoulli_(self.opt['edge_keep_prob'])
+            if self.opt['cuda']:
+                keep_edges = keep_edges.cuda()
+            remain_adj_matrix = keep_edges * adj_matrix
+            return remain_adj_matrix
+        else:
+            return adj_matrix
 
 def pool(h, mask, type='max'):
     if type == 'max':
