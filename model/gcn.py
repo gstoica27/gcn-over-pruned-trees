@@ -381,7 +381,11 @@ class GCN(nn.Module):
                 if self.opt['cuda']:
                     forward_ones = forward_ones.cuda()
                 deprel_alpha = self.opt.get('deprel_alpha', 1.0)
-                forward_deprel_embs = forward_deprel_embs * deprel_alpha + (1 - deprel_alpha) * forward_ones
+
+                if l >= self.opt['deprel_max_depth']:
+                    forward_deprel_embs = forward_ones
+
+                # forward_deprel_embs = forward_deprel_embs * deprel_alpha + (1 - deprel_alpha) * forward_ones
                 # [B,N,H]
                 forward_encs = self.traverse_deprel(token_encs=gcn_inputs,
                                                     deprel_embs=forward_deprel_embs,
@@ -409,7 +413,9 @@ class GCN(nn.Module):
                     reverse_ones = torch.ones((batch_size, max_len, self.opt['deprel_emb_dim']))
                     if self.opt['cuda']:
                         reverse_ones = reverse_ones.cuda()
-                    reverse_deprel_embs = reverse_deprel_embs * deprel_alpha + (1 - deprel_alpha) * reverse_ones
+                    if l >= self.opt['deprel_max_depth']:
+                        reverse_deprel_embs = reverse_ones
+                    # reverse_deprel_embs = reverse_deprel_embs * deprel_alpha + (1 - deprel_alpha) * reverse_ones
                     # [B,N,H]
                     reverse_encs = self.traverse_deprel(token_encs=gcn_inputs,
                                                         deprel_embs=reverse_deprel_embs,
@@ -427,6 +433,12 @@ class GCN(nn.Module):
                     if self.opt['cuda']:
                         self_loop_lookup = self_loop_lookup.cuda()
                     self_loop_emb = self.deprel_emb(self_loop_lookup)
+
+                    if l >= self.opt['deprel_max_depth']:
+                        self_loop_emb = torch.ones((1, 1, self.opt['deprel_emb_dim']))
+                        if self.opt['cuda']:
+                            self_loop_emb = self_loop_emb.cuda()
+
                     # [B,N,H]
                     self_loop_encs = self.traverse_self_loop(token_encs=gcn_inputs,
                                                              self_loop_emb=self_loop_emb,

@@ -113,6 +113,9 @@ parser.add_argument('--edge_keep_prob', type=float, default=1.0)
 # and the dependency relation, deprel_keep_prop keeps the edge while losing the
 # dependence relation.
 parser.add_argument('--deprel_keep_prop', type=float, default=1.0)
+# Maximum depth at which to apply dependency relation transformations.
+# Remaining layers will transform from all ones vector
+parser.add_argument('--deprel_max_depth', type=int, default=2)
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
