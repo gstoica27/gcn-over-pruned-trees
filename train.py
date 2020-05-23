@@ -213,8 +213,8 @@ for epoch in range(1, opt['num_epoch']+1):
     trainer.model.train()
     trainer.optimizer.zero_grad()
 
-    # for i, batch in enumerate(train_batch):
-    for i in range(0):
+    for i, batch in enumerate(train_batch):
+    # for i in range(0):
         start_time = time.time()
         global_step += 1
         loss = trainer.update(batch)
@@ -241,21 +241,21 @@ for epoch in range(1, opt['num_epoch']+1):
         pickle.dump(trainer.get_deprel_emb(), handle)
 
     # eval on train
-    # print("Evaluating on train set...")
-    # train_predictions = []
-    # train_eval_loss = 0
-    # for i, batch in enumerate(train_batch):
-    #     preds, _, loss = trainer.predict(batch)
-    #     train_predictions += preds
-    #     train_eval_loss += loss
-    # train_predictions = [id2label[p] for p in train_predictions]
-    # train_eval_loss = train_eval_loss / train_batch.num_examples * opt['batch_size']
-    #
-    # train_p, train_r, train_f1 = scorer.score(train_batch.gold(), train_predictions)
-    # print("epoch {}: train_loss = {:.6f}, train_eval_loss = {:.6f}, dev_f1 = {:.4f}".format(
-    #     epoch, train_loss, train_eval_loss, train_f1))
-    # train_score = train_f1
-    # file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}".format(epoch, train_loss, train_eval_loss, train_f1))
+    print("Evaluating on train set...")
+    train_predictions = []
+    train_eval_loss = 0
+    for i, batch in enumerate(train_batch):
+        preds, _, loss = trainer.predict(batch)
+        train_predictions += preds
+        train_eval_loss += loss
+    train_predictions = [id2label[p] for p in train_predictions]
+    train_eval_loss = train_eval_loss / train_batch.num_examples * opt['batch_size']
+
+    train_p, train_r, train_f1 = scorer.score(train_batch.gold(), train_predictions)
+    print("epoch {}: train_loss = {:.6f}, train_eval_loss = {:.6f}, dev_f1 = {:.4f}".format(
+        epoch, train_loss, train_eval_loss, train_f1))
+    train_score = train_f1
+    file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}".format(epoch, train_loss, train_eval_loss, train_f1))
     
     # eval on dev
     print("Evaluating on dev set...")
