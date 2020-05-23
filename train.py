@@ -12,6 +12,7 @@ import argparse
 from shutil import copyfile
 import torch
 import pickle
+import json
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
@@ -155,7 +156,7 @@ if opt['use_bert_embeddings']:
 else:
     id2embeddings = None
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + '/train_0.1.json', opt['batch_size'], opt,
+train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt,
                          vocab, evaluation=False, bert_embeddings=id2embeddings)
 dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt,
                        vocab, evaluation=True, bert_embeddings=id2embeddings)
@@ -212,7 +213,8 @@ for epoch in range(1, opt['num_epoch']+1):
     trainer.model.train()
     trainer.optimizer.zero_grad()
 
-    for i, batch in enumerate(train_batch):
+    # for i, batch in enumerate(train_batch):
+    for i in range(0):
         start_time = time.time()
         global_step += 1
         loss = trainer.update(batch)
@@ -239,21 +241,21 @@ for epoch in range(1, opt['num_epoch']+1):
         pickle.dump(trainer.get_deprel_emb(), handle)
 
     # eval on train
-    print("Evaluating on train set...")
-    train_predictions = []
-    train_eval_loss = 0
-    for i, batch in enumerate(train_batch):
-        preds, _, loss = trainer.predict(batch)
-        train_predictions += preds
-        train_eval_loss += loss
-    train_predictions = [id2label[p] for p in train_predictions]
-    train_eval_loss = train_eval_loss / train_batch.num_examples * opt['batch_size']
-
-    train_p, train_r, train_f1 = scorer.score(train_batch.gold(), train_predictions)
-    print("epoch {}: train_loss = {:.6f}, train_eval_loss = {:.6f}, dev_f1 = {:.4f}".format(
-        epoch, train_loss, train_eval_loss, train_f1))
-    train_score = train_f1
-    file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}".format(epoch, train_loss, train_eval_loss, train_f1))
+    # print("Evaluating on train set...")
+    # train_predictions = []
+    # train_eval_loss = 0
+    # for i, batch in enumerate(train_batch):
+    #     preds, _, loss = trainer.predict(batch)
+    #     train_predictions += preds
+    #     train_eval_loss += loss
+    # train_predictions = [id2label[p] for p in train_predictions]
+    # train_eval_loss = train_eval_loss / train_batch.num_examples * opt['batch_size']
+    #
+    # train_p, train_r, train_f1 = scorer.score(train_batch.gold(), train_predictions)
+    # print("epoch {}: train_loss = {:.6f}, train_eval_loss = {:.6f}, dev_f1 = {:.4f}".format(
+    #     epoch, train_loss, train_eval_loss, train_f1))
+    # train_score = train_f1
+    # file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}".format(epoch, train_loss, train_eval_loss, train_f1))
     
     # eval on dev
     print("Evaluating on dev set...")
@@ -302,6 +304,19 @@ for epoch in range(1, opt['num_epoch']+1):
         print("Saving Excluded Triple Confusion Matrices...")
         with open(test_confusion_save_file, 'wb') as handle:
             pickle.dump(test_confusion_matrix, handle)
+
+        dev_is_incorrect = np.array(dev_predictions) != np.array(dev_batch.gold())
+        dev_incorrect_data = np.array(dev_batch.raw_data)[dev_is_incorrect]
+        dev_save_path = os.path.join(opt['data_dir'], 'dev_incorrect_data.json')
+        test_is_incorrect = np.array(test_predictions) != np.array(test_batch.gold())
+        test_incorrect_data = np.array(test_batch.raw_data)[test_is_incorrect]
+        test_save_path = os.path.join(opt['data_dir'], 'test_incorrect_data')
+        print(f'Saving {len(dev_incorrect_data)} samples to {dev_save_path}...')
+        with open(dev_save_path, 'w') as handle:
+            json.dump(dev_incorrect_data.tolist(), handle)
+        print(f'Saving {len(test_incorrect_data)} samples to {test_save_path}...')
+        with open(test_save_path, 'w') as handle:
+            json.dump(test_incorrect_data.tolist(), handle)
 
     print("Best Dev Metrics | F1: {} | Precision: {} | Recall: {}".format(
         best_dev_metrics['f1'], best_dev_metrics['precision'], best_dev_metrics['recall']

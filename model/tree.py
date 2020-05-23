@@ -72,6 +72,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
             nodes[i].idx = i
             nodes[i].dist = -1 # just a filler
             nodes[i].deprel = deprel[i]
+            nodes[i].token = tokens[i]
             if h == 0:
                 root = nodes[i]
             else:
@@ -153,6 +154,7 @@ def head_to_tree(head, tokens, len_, prune, subj_pos, obj_pos, deprel):
             nodes[i].dist = dist[i]
             nodes[i].deprel = deprel[i]
             nodes[i].head = head[i]
+            nodes[i].token = tokens[i]
             if h > 0 and i != highest_node:
                 assert nodes[h-1] is not None
                 nodes[h-1].add_child(nodes[i])

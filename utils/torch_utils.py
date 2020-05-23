@@ -155,7 +155,10 @@ def load(model, optimizer, filename):
 
 def load_config(filename):
     try:
-        dump = torch.load(filename)
+        if torch.cuda.is_available():
+            dump = torch.load(filename)
+        else:
+            dump = torch.load(filename, map_location=torch.device('cpu'))
     except BaseException:
         print("[ Fail: model loading failed. ]")
     return dump['config']

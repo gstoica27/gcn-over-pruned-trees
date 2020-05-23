@@ -5,11 +5,15 @@ import random
 import argparse
 from tqdm import tqdm
 import torch
+import numpy as np
+import os
+import json
 
 from data.loader import DataLoader
 from model.trainer import GCNTrainer
 from utils import torch_utils, scorer, constant, helper
 from utils.vocab import Vocab
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('model_dir', type=str, help='Directory of the model.')
@@ -52,6 +56,7 @@ id2label = dict([(v,k) for k,v in label2id.items()])
 
 predictions = []
 all_probs = []
+incorrect_indices = []
 batch_iter = tqdm(batch)
 for i, b in enumerate(batch_iter):
     preds, probs, _ = trainer.predict(b)
@@ -59,6 +64,12 @@ for i, b in enumerate(batch_iter):
     all_probs += probs
 
 predictions = [id2label[p] for p in predictions]
+is_incorrect = np.array(predictions) != np.array(batch.gold())
+incorrect_data = np.array(batch.raw_data)[is_incorrect]
+save_file = os.path.join( opt['data_dir'], 'test_incorrect.json')
+with open(save_file, 'wb') as handle:
+    json.dump(incorrect_data.tolist(), handle)
+
 p, r, f1 = scorer.score(batch.gold(), predictions, verbose=True)
 print("{} set evaluate result: {:.2f}\t{:.2f}\t{:.2f}".format(args.dataset,p,r,f1))
 
