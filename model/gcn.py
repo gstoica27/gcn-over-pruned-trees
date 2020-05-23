@@ -46,6 +46,8 @@ class GCNRelationModel(nn.Module):
         self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim']) if opt['pos_dim'] > 0 else None
         self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim']) if opt['ner_dim'] > 0 else None
         self.deprel_side = opt['deprel_emb_dim'] ## set equal to hidden_dim mostly
+        if opt['adj_type'] == 'diagonal_deprel':
+            self.deprel_side = opt['hidden_dim']
         if opt['adj_type'] != 'regular' or opt['deprel_attn']:
             deprel_emb_dim = self.deprel_side
         # regular adjacency matrix, thus fill with dummy weight
@@ -275,12 +277,29 @@ class GCN(nn.Module):
                 AxW = self.W[l](Ax)
                 AxW = AxW + self.W[l](gcn_inputs)  # self loop
             elif self.opt['adj_type'] == 'diagonal_deprel':
-                # [B,T1,H] -> [B,1,T2,H]
-                layer_inputs = gcn_inputs.view((batch_size, 1, max_len, encoding_dim))
-                # [B,T1,T2,H] x [B,1,T2,H] -> [B,T1,T2,H] -> [B,T1,H]
-                Ax = (deprel_adj * layer_inputs).sum(2)
-                AxW = self.W[l](Ax)
-                AxW = AxW + self.W[l](gcn_inputs)  # self loop
+                # [B,N,D]
+                forward_deprel_embs = self.deprel_emb(deprel)
+                # Extract all dependency relations that are children of current node
+                forward_adj_matrix = torch.where((0 < adj) * (adj < constant.DEPREL_FORWARD_BOUND),
+                                                 torch.ones_like(adj),
+                                                 torch.zeros_like(adj)). \
+                    type(torch.float32)
+                forward_traversed = forward_adj_matrix.bmm(forward_deprel_embs * gcn_inputs)
+                reverse_adj_matrix = torch.where(
+                    (constant.DEPREL_FORWARD_BOUND < adj) * (adj < constant.DEPREL_REVERSE_BOUND),
+                    torch.ones_like(adj),
+                    torch.zeros_like(adj)). \
+                    type(torch.float32)
+                # [B,N,D]
+                reverse_deprel_embs = self.deprel_emb(deprel + constant.DEPREL_FORWARD_BOUND)
+                reverse_traversed = reverse_adj_matrix.bmm(reverse_deprel_embs * gcn_inputs)
+                self_loop_lookup = torch.ones((1, 1)).type(torch.LongTensor) * constant.SELF_LOOP_INDEX
+                if self.opt['cuda']:
+                    self_loop_lookup = self_loop_lookup.cuda()
+                self_loop_emb = self.deprel_emb(self_loop_lookup)
+                self_loop_traversed = gcn_inputs * self_loop_emb
+                AxW = forward_traversed + reverse_traversed + self_loop_traversed
+
             elif self.opt['adj_type'] == 'full_deprel':
                 ########################################################################################################
                 ########################################## Weight Extractions ##########################################
