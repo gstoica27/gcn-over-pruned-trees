@@ -16,16 +16,17 @@ from utils.vocab import Vocab
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('model_dir', type=str, help='Directory of the model.')
-parser.add_argument('--model', type=str, default='best_model.pt', help='Name of the model file.')
-parser.add_argument('--data_dir', type=str, default='dataset/tacred')
+parser.add_argument('--model_dir', type=str, help='Directory of the model.',
+        default='/Users/georgestoica/Desktop/icloud_desktop/Research/gcn-over-pruned-trees/saved_models/Regular-CGCN')
+parser.add_argument('--model', type=str, default='checkpoint_epoch_100.pt', help='Name of the model file.')
+parser.add_argument('--data_dir', type=str, default='/Volumes/External HDD/dataset/tacred/data/json')
 parser.add_argument('--dataset', type=str, default='test', help="Evaluate on dev or test.")
 
 parser.add_argument('--seed', type=int, default=1234)
 parser.add_argument('--cuda', type=bool, default=torch.cuda.is_available())
 parser.add_argument('--cpu', action='store_true')
 args = parser.parse_args()
-
+args.cpu = True
 torch.manual_seed(args.seed)
 random.seed(1234)
 if args.cpu:
@@ -37,16 +38,19 @@ elif args.cuda:
 model_file = args.model_dir + '/' + args.model
 print("Loading model from {}".format(model_file))
 opt = torch_utils.load_config(model_file)
+opt['cuda'] = torch.cuda.is_available()
+opt['cpu'] = not torch.cuda.is_available()
 trainer = GCNTrainer(opt)
 trainer.load(model_file)
-
+trainer.opt['cuda'] = torch.cuda.is_available()
+trainer.opt['cpu'] = not torch.cuda.is_available()
 # load vocab
 vocab_file = args.model_dir + '/vocab.pkl'
 vocab = Vocab(vocab_file, load=True)
 assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
 
 # load data
-data_file = opt['data_dir'] + '/{}.json'.format(args.dataset)
+data_file = args.data_dir + '/{}.json'.format(args.dataset)
 print("Loading data from {} with batch size {}...".format(data_file, opt['batch_size']))
 batch = DataLoader(data_file, opt['batch_size'], opt, vocab, evaluation=True)
 
@@ -66,8 +70,8 @@ for i, b in enumerate(batch_iter):
 predictions = [id2label[p] for p in predictions]
 is_incorrect = np.array(predictions) != np.array(batch.gold())
 incorrect_data = np.array(batch.raw_data)[is_incorrect]
-save_file = os.path.join( opt['data_dir'], 'test_incorrect.json')
-with open(save_file, 'wb') as handle:
+save_file = os.path.join( args.data_dir, 'test_incorrect.json')
+with open(save_file, 'w') as handle:
     json.dump(incorrect_data.tolist(), handle)
 
 p, r, f1 = scorer.score(batch.gold(), predictions, verbose=True)

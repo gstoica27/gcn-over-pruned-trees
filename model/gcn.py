@@ -48,7 +48,7 @@ class GCNRelationModel(nn.Module):
         self.deprel_side = opt['deprel_emb_dim'] ## set equal to hidden_dim mostly
         if opt['adj_type'] == 'diagonal_deprel':
             self.deprel_side = opt['hidden_dim']
-        if opt['adj_type'] != 'regular' or opt['deprel_attn']:
+        if opt['adj_type'] != 'regular':
             deprel_emb_dim = self.deprel_side
         # regular adjacency matrix, thus fill with dummy weight
         else:
@@ -154,12 +154,17 @@ class GCN(nn.Module):
             self.preprocessor = nn.Linear(self.in_dim, self.mem_dim)
             self.in_dim = self.mem_dim
         elif opt['adj_type'] in ['full_deprel']:
-            self.W = nn.ModuleList()
-            for layer in range(self.layers):
-                input_dim = opt['deprel_emb_dim']
-                output_input_dim = self.in_dim if layer == 0 else self.mem_dim
-                output_dim = input_dim * self.mem_dim
-                self.W.append(nn.Linear(output_input_dim, output_dim, bias=True))
+            # self.W = nn.ModuleList()
+            # for layer in range(self.layers):
+            #     input_dim = opt['deprel_emb_dim']
+            #     output_input_dim = self.in_dim if layer == 0 else self.mem_dim
+            #     output_dim = input_dim * self.mem_dim
+            #     self.W.append(nn.Linear(output_input_dim, output_dim, bias=True))
+
+            input_dim = opt['deprel_emb_dim']
+            output_input_dim = self.in_dim
+            output_dim = input_dim * self.mem_dim
+            self.W = nn.Linear(output_input_dim, output_dim, bias=True)
         else:
             # gcn layer
             self.W = nn.ModuleList()
@@ -170,8 +175,7 @@ class GCN(nn.Module):
                     self.deprel_dropout = nn.Dropout(opt.get('deprel_dropout', 0.0))
                 self.W.append(nn.Linear(input_dim,  self.mem_dim))
 
-        if opt['deprel_attn']:
-            self.attn_proj = nn.Linear(opt['deprel_emb_dim'], 1, bias=False)
+
 
     def conv_l2(self):
         conv_weights = []
@@ -252,14 +256,6 @@ class GCN(nn.Module):
             # Encode parameters for deprel changes
             gcn_inputs = self.preprocessor(gcn_inputs)
         batch_size, max_len, encoding_dim = gcn_inputs.shape
-        if self.opt['adj_type'] == 'full_deprel' or self.opt['deprel_attn']:
-            deprel_emb = self.deprel_emb(deprel)
-        elif self.opt['adj_type'] != 'regular':
-            deprel_adj = self.deprel_emb(adj.type(torch.int64)) # [B,T,T,H]
-            deprel_adj = deprel_adj.reshape((batch_size, max_len, max_len, -1))
-        else:
-            batch_size, max_len, encoding_dim = gcn_inputs.shape
-            deprel_adj = None
         # gcn layer
         adj_matrix = torch.where(adj != 0, torch.ones_like(adj), torch.zeros_like(adj)).type(torch.float32)
         denom = adj_matrix.sum(2).unsqueeze(2) + 1
@@ -267,9 +263,6 @@ class GCN(nn.Module):
         # zero out adj for ablation
         if self.opt.get('no_adj', False):
             adj_matrix = torch.zeros_like(adj_matrix)
-        elif self.opt['adj_type'] == 'concat_deprel':
-            deprel_embs = self.deprel_dropout(self.deprel_emb(deprel))
-            gcn_inputs = torch.cat([gcn_inputs, deprel_embs], dim=-1)
         for l in range(self.layers):
             if self.opt['adj_type'] == 'regular':
                 # [B,T1,T2] x [B,T2,H] -> [B,T1,H]
@@ -305,9 +298,9 @@ class GCN(nn.Module):
                 ########################################## Weight Extractions ##########################################
                 ########################################################################################################
                 # [D,T,H]
-                weight_l = self.W[l].weight.reshape((self.opt['deprel_emb_dim'], -1, self.mem_dim))
+                weight_l = self.W.weight.reshape((self.opt['deprel_emb_dim'], -1, self.mem_dim))
                 # [D, H]
-                bias_l = self.W[l].bias.reshape((self.opt['deprel_emb_dim'], self.mem_dim))
+                bias_l = self.W.bias.reshape((self.opt['deprel_emb_dim'], self.mem_dim))
                 ########################################################################################################
                 ######################### Forward Dependency Relation Traversal and Aggregation ########################
                 ########################################################################################################
@@ -391,19 +384,6 @@ class GCN(nn.Module):
                                                              weight=weight_l,
                                                              bias=bias_l)
                     AxW += self_loop_encs
-
-            elif self.opt['adj_type'] == 'concat_deprel':
-                # [B,T1,H]
-                Ax = adj_matrix.bmm(gcn_inputs)
-                AxW = self.W[l](Ax)
-                AxW = AxW + self.W[l](gcn_inputs)  # self loop
-            elif self.opt['adj_type'] == 'only_deprel':
-                # [B,T1,T2,H] -> [B,T1,H]
-                current_connections = deprel_adj.sum(2)
-                layer_inputs = gcn_inputs + current_connections
-                Ax = layer_inputs
-                AxW = self.W[l](Ax)
-                AxW = AxW + self.W[l](gcn_inputs)  # self loop
             else:
                 raise ValueError('Adjacency aggregation type not supported.')
 
