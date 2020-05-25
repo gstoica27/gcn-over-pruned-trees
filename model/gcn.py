@@ -70,7 +70,13 @@ class GCNRelationModel(nn.Module):
         in_dim = opt['hidden_dim']*3
         layers = [nn.Linear(in_dim, opt['hidden_dim']), nn.ReLU()]
         for _ in range(self.opt['mlp_layers']-1):
-            layers += [nn.Linear(opt['hidden_dim'], opt['hidden_dim']), nn.ReLU()]
+            if _ < self.opt['mlp_layers'] - 2 or self.opt['kg_loss'] is None:
+                output_dim = opt['hidden_dim']
+                layers += [nn.Linear(opt['hidden_dim'], output_dim), nn.ReLU()]
+            elif _ == self.opt['mlp_layers'] -2 and self.opt['kg_loss'] is not None:
+                output_dim = opt['kg_loss']['model']['rel_emb_dim']
+                layers += [nn.Linear(opt['hidden_dim'], output_dim)]
+
         self.out_mlp = nn.Sequential(*layers)
 
     def init_embeddings(self):
