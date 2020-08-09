@@ -70,9 +70,9 @@ vocab = Vocab(vocab_file, load=True)
 assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
 
 # load data
-data_file = opt['data_dir'] + '/{}.json'.format(args.dataset)
+data_file = opt['data_dir'] + f'/{opt["data_type"]}_test.json'
 print("Loading data from {} with batch size {}...".format(data_file, opt['batch_size']))
-batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}_test.json', opt['batch_size'], opt, vocab, evaluation=True)
+batch = DataLoader(data_file, opt['batch_size'], opt, vocab, evaluation=True)
 
 if opt['link_prediction'] is not None:
     opt['link_prediction']['model'] = add_kg_model_params(cfg_dict, cwd)
