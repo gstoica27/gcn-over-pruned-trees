@@ -65,7 +65,7 @@ trainer = GCNTrainer(opt)
 trainer.load(model_file)
 
 # load vocab
-vocab_file = os.path.join(cfg_dict['model_save_file'], 'vocab.pkl')
+vocab_file = os.path.join(cfg_dict['model_save_dir'], 'vocab.pkl')
 vocab = Vocab(vocab_file, load=True)
 assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
 
