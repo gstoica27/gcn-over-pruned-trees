@@ -40,12 +40,13 @@ cpu: False # Ignore CUDA.
 load: False
 type_substitute: False
 model_file:
+data_type: new
 link_prediction:
-  model: 'ConvE'
-  label_smoothing: .1
-  lambda: .1
-  freeze_network: False
-  with_relu: True
-  without_observed: False
-  without_verification: False
-  without_no_relation: False
+#  model: 'ConvE'
+#  label_smoothing: .1
+#  lambda: .1
+#  freeze_network: False
+#  with_relu: True
+#  without_observed: False
+#  without_verification: False
+#  without_no_relation: False
