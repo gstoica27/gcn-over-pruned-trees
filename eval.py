@@ -22,7 +22,7 @@ parser.add_argument('--model_path', type=str, default='best_model.pt', help='Nam
 
 parser.add_argument('--cuda', type=bool, default=torch.cuda.is_available())
 parser.add_argument('--cpu', action='store_true')
-parser.add_argument('--config_path', type=str)
+parser.add_argument('--config_dir', type=str)
 args = parser.parse_args()
 
 cwd = os.getcwd()
@@ -37,8 +37,8 @@ def add_kg_model_params(cfg_dict, cwd):
     params['freeze_network'] = cfg_dict['link_prediction']['freeze_network']
     return params
 
-
-with open(args.config_path, 'r') as file:
+config_path = os.path.join(args.config_dir, 'config.json')
+with open(config_path, 'r') as file:
     cfg_dict = yaml.load(file)
 
 cfg_dict['topn'] = float(cfg_dict['topn'])
