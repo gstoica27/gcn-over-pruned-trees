@@ -95,7 +95,7 @@ for i, b in enumerate(batch_iter):
 
 predictions = [id2label[p] for p in predictions]
 p, r, f1 = scorer.score(batch.gold(), predictions, verbose=True)
-print("{} set evaluate result: {:.2f}\t{:.2f}\t{:.2f}".format(args.dataset,p,r,f1))
+print("Result: {:.2f}\t{:.2f}\t{:.2f}".format(p,r,f1))
 print(Counter([relation for relation in predictions]))
 print("Evaluation ended.")
 
