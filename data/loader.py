@@ -166,7 +166,7 @@ class DataLoader(object):
             if relation == constant.NO_RELATION_ID:
                 sample_known = np.ones(num_objects, dtype=np.float32)
             else:
-                sample_known = np.zeros(num_objects, dtype=np.float32)
+                sample_known = np.zeros(17, dtype=np.float32)
                 sample_known[list(sample_objects)] = 1.
             labels.append(sample_known)
         labels = np.stack(labels, axis=0)
