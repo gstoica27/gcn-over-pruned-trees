@@ -164,7 +164,7 @@ class DataLoader(object):
         labels = []
         for sample_objects, relation in zip(known_objects, relations):
             if relation == constant.NO_RELATION_ID:
-                sample_known = np.ones(num_objects, dtype=np.float32)
+                sample_known = np.ones(17, dtype=np.float32)
             else:
                 sample_known = np.zeros(17, dtype=np.float32)
                 sample_known[list(sample_objects)] = 1.
