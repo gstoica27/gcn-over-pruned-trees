@@ -23,36 +23,49 @@ from utils import torch_utils, scorer, constant, helper
 from utils.vocab import Vocab
 import yaml
 
+def generate_param_list(params, cfg_dict, prefix=''):
+    param_list = prefix
+    for param in params:
+        if param_list == '':
+            param_list += f'{cfg_dict[param]}'
+        else:
+            param_list += f'-{cfg_dict[param]}'
+    return param_list
 
 def create_model_name(cfg_dict):
     top_level_name = 'TACRED-{}'.format(cfg_dict['data_type'].upper())
     approach_type = 'CGCN-JRRELP' if cfg_dict['link_prediction'] is not None else 'CGCN'
-    main_name = '{}-{}-{}-{}'.format(
-        cfg_dict['optim'], cfg_dict['lr'], cfg_dict['lr_decay'],
-        cfg_dict['seed']
-    )
+    optim_name = ['optim', 'lr', 'lr_decay', 'conv_l2', 'pooling_l2', 'max_grad_norm']
+    base_params = ['emb_dim', 'ner_dim', 'pos_dim', 'hidden_dim', 'num_layers',
+                   'input_dropout', 'gcn_dropout', 'word_dropout', 'lower', 'prune_k', 'no_adj']
+
+    param_name_list = [top_level_name, approach_type]
+
+    optim_name = generate_param_list(optim_name, cfg_dict, prefix='optim')
+    param_name_list.append(optim_name)
+
+    main_name = generate_param_list(base_params, cfg_dict, prefix='base')
+    param_name_list.append(main_name)
+
+    if cfg_dict['rnn']:
+        rnn_params = ['rnn_hidden', 'rnn_layers', 'rnn_dropout']
+        rnn_name = generate_param_list(rnn_params, cfg_dict, prefix='rnn')
+        param_name_list.append(rnn_name)
+
     if cfg_dict['link_prediction'] is not None:
         kglp_task_cfg = cfg_dict['link_prediction']
-        kglp_task = '{}-{}-{}-{}-{}-{}-{}'.format(
-            kglp_task_cfg['label_smoothing'],
-            kglp_task_cfg['lambda'],
-            kglp_task_cfg['freeze_network'],
-            kglp_task_cfg['with_relu'],
-            kglp_task_cfg['without_observed'],
-            kglp_task_cfg['without_verification'],
-            kglp_task_cfg['without_no_relation']
-        )
-        lp_cfg = cfg_dict['link_prediction']['model']
-        kglp_name = '{}-{}-{}-{}-{}-{}-{}'.format(
-            lp_cfg['input_drop'], lp_cfg['hidden_drop'],
-            lp_cfg['feat_drop'], lp_cfg['rel_emb_dim'],
-            lp_cfg['use_bias'], lp_cfg['filter_channels'],
-            lp_cfg['stride']
-        )
+        jrrelp_params = ['label_smoothing', 'lambda', 'free_network',
+                       'with_relu', 'without_observved',
+                       'without_verification', 'without_no_relation']
+        jrrelp_name = generate_param_list(jrrelp_params, kglp_task_cfg, prefix='jrrelp')
+        param_name_list.append(jrrelp_name)
 
-        aggregate_name = os.path.join(top_level_name, approach_type, main_name, kglp_task, kglp_name)
-    else:
-        aggregate_name = os.path.join(top_level_name, approach_type, main_name)
+        kglp_params = ['input_drop', 'hidden_drop', 'feat_drop', 'rel_emb_dim', 'use_bias', 'filter_channels', 'stride']
+        lp_cfg = cfg_dict['link_prediction']['model']
+        kglp_name = generate_param_list(kglp_params, lp_cfg, prefix='kglp')
+        param_name_list.append(kglp_name)
+
+    aggregate_name = os.path.join(*param_name_list)
     return aggregate_name
 
 
