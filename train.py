@@ -102,10 +102,10 @@ opt['object_indices'] = vocab.obj_idxs
 
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + f'/train_{opt["data_type"]}.json', opt['batch_size'], opt, vocab, evaluation=False)
-dev_batch = DataLoader(opt['data_dir'] + f'/dev_{opt["data_type"]}.json', opt['batch_size'], opt, vocab, evaluation=True,
+train_batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}/train.json', opt['batch_size'], opt, vocab, evaluation=False)
+dev_batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}/dev.json', opt['batch_size'], opt, vocab, evaluation=True,
                        kg_graph=train_batch.kg_graph)
-test_batch = DataLoader(opt['data_dir'] + f'/test_{opt["data_type"]}.json', opt['batch_size'], opt, vocab, evaluation=True,
+test_batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}/test.json', opt['batch_size'], opt, vocab, evaluation=True,
                         kg_graph=dev_batch.kg_graph)
 
 if opt['link_prediction'] is not None:
