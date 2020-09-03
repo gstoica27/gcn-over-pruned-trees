@@ -36,7 +36,7 @@ def create_model_name(cfg_dict):
     top_level_name = 'TACRED-{}'.format(cfg_dict['data_type'].upper())
     approach_type = 'CGCN-JRRELP' if cfg_dict['link_prediction'] is not None else 'CGCN'
     optim_name = ['optim', 'lr', 'lr_decay', 'conv_l2', 'pooling_l2', 'max_grad_norm', 'seed']
-    base_params = ['emb_dim', 'ner_dim', 'pos_dim', 'hidden_dim', 'num_layers',
+    base_params = ['emb_dim', 'ner_dim', 'pos_dim', 'hidden_dim', 'num_layers', 'mlp_layers',
                    'input_dropout', 'gcn_dropout', 'word_dropout', 'lower', 'prune_k', 'no_adj']
 
     param_name_list = [top_level_name, approach_type]
