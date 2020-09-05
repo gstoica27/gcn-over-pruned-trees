@@ -1,5 +1,5 @@
-data_dir: '/home/scratch/gis/datasets/tacred/data/json/relabeled'
-vocab_dir: '/home/scratch/gis/datasets/vocab/vocab'
+data_dir: '/zfsauton3/home/gis/research/relation_extraction/gcn-over-pruned-trees/dataset/full_tacred/tacred/data/json/relabeled'
+vocab_dir: '/zfsauton3/home/gis/research/relation_extraction/gcn-over-pruned-trees/dataset/full_tacred/tacred/data/vocab'
 test_save_dir: '/home/scratch/gis/tacred_test_performances'
 save_dir: '/home/scratch/gis/saved_models'
 emb_dim: 300  # Word embedding dimension.
@@ -9,7 +9,7 @@ hidden_dim: 200 # RNN hidden state size.
 num_layers: 2 # Num of RNN layers.
 input_dropout: .5 # Input and RNN dropout rate.
 gcn_dropout: .5
-word_dropout: .04 # The rate at which randomly set a word to UNK.
+word_dropout: .0 # The rate at which randomly set a word to UNK.
 topn: 1e10  # Only finetune top N embeddings.
 lower: False  # Lowercase all words.
 prune_k: 1
@@ -39,7 +39,7 @@ cuda: True
 cpu: False # Ignore CUDA.
 load: False
 model_file:
-data_type: unpatched
+data_type: patched
 link_prediction:
 #  model: 'ConvE'
 #  label_smoothing: .1
