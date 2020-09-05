@@ -33,7 +33,7 @@ def generate_param_list(params, cfg_dict, prefix=''):
     return param_list
 
 def create_model_name(cfg_dict):
-    top_level_name = 'TACRED-{}'.format(cfg_dict['data_type'].upper())
+    top_level_name = 'TACRED-{}-{}'.format(cfg_dict['data_type'].upper(), cfg_dict['version'].upper())
     approach_type = 'CGCN-JRRELP' if cfg_dict['link_prediction'] is not None else 'CGCN'
     optim_name = ['optim', 'lr', 'lr_decay', 'conv_l2', 'pooling_l2', 'max_grad_norm', 'seed']
     base_params = ['emb_dim', 'ner_dim', 'pos_dim', 'hidden_dim', 'num_layers', 'mlp_layers',
@@ -81,7 +81,7 @@ def add_kg_model_params(cfg_dict, cwd):
 
 cwd = os.getcwd()
 on_server = 'Desktop' not in cwd
-config_path = os.path.join(cwd, 'configs', f'{"nell" if on_server else "local"}_config.yaml')
+config_path = os.path.join(cwd, 'configs', f'{"server" if on_server else "local"}_config.yaml')
 # config_path = os.path.join(cwd, 'configs', 'server_config.yaml')
 with open(config_path, 'r') as file:
     cfg_dict = yaml.load(file)
@@ -115,10 +115,10 @@ opt['object_indices'] = vocab.obj_idxs
 
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}/train.json', opt['batch_size'], opt, vocab, evaluation=False)
-dev_batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}/dev.json', opt['batch_size'], opt, vocab, evaluation=True,
+train_batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}/train_{opt["version"]}.json', opt['batch_size'], opt, vocab, evaluation=False)
+dev_batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}/dev_{opt["version"]}.json', opt['batch_size'], opt, vocab, evaluation=True,
                        kg_graph=train_batch.kg_graph)
-test_batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}/test.json', opt['batch_size'], opt, vocab, evaluation=True,
+test_batch = DataLoader(opt['data_dir'] + f'/{opt["data_type"]}/test_{opt["version"]}.json', opt['batch_size'], opt, vocab, evaluation=True,
                         kg_graph=dev_batch.kg_graph)
 
 if opt['link_prediction'] is not None:
