@@ -41,7 +41,7 @@ config_path = os.path.join(cwd,
                            # dataset,
                            'configs',
                            dataset, f'{"nell" if on_server else "local"}_config.yaml')
-# config_path = os.path.join(cwd, 'configs', 'nell_config.yaml')
+# config_path = os.path.join(cwd, 'configs', 'server_config.yaml')
 with open(config_path, 'r') as file:
     cfg_dict = yaml.load(file)
 

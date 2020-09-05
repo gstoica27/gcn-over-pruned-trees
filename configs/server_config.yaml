@@ -40,6 +40,7 @@ cpu: False # Ignore CUDA.
 load: False
 model_file:
 data_type: unpatched
+version: full
 link_prediction:
 #  model: 'ConvE'
 #  label_smoothing: .1
