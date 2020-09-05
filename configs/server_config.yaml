@@ -1,5 +1,5 @@
-data_dir: '/home/scratch/gis/datasets/tacred/data/json/relabeled'
-vocab_dir: '/home/scratch/gis/datasets/vocab/vocab'
+data_dir: '/zfsauton3/home/gis/research/relation_extraction/gcn-over-pruned-trees/dataset/full_tacred/tacred/data/json/relabeled'
+vocab_dir: '/zfsauton3/home/gis/research/relation_extraction/gcn-over-pruned-trees/dataset/full_tacred/tacred/data/vocab'
 test_save_dir: '/home/scratch/gis/tacred_test_performances'
 save_dir: '/home/scratch/gis/saved_models'
 emb_dim: 300  # Word embedding dimension.
