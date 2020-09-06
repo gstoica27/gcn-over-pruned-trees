@@ -57,6 +57,11 @@ init_time = time.time()
 label2id = constant.LABEL_TO_ID
 opt['num_class'] = len(label2id)
 
+# load vocab
+vocab_file = os.path.join(cfg_dict['save_dir'], 'vocab.pkl')
+vocab = Vocab(vocab_file, load=True)
+assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
+opt['vocab_size'] = vocab.size
 
 # load opt
 model_file = os.path.join(cfg_dict['save_dir'], args.model_path)
@@ -64,12 +69,6 @@ print("Loading model from {}".format(model_file))
 # opt = torch_utils.load_config(model_file)
 trainer = GCNTrainer(opt)
 trainer.load(model_file)
-
-# load vocab
-vocab_file = os.path.join(cfg_dict['save_dir'], 'vocab.pkl')
-vocab = Vocab(vocab_file, load=True)
-assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
-opt['vocab_size'] = vocab.size
 
 # load data
 data_file = opt['data_dir'] +f'/{opt["data_type"]}/test_{opt["version"]}.json'
