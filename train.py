@@ -232,7 +232,8 @@ for epoch in range(1, opt['num_epoch']+1):
     if best_dev_metrics['f1'] < current_dev_metrics['f1']:
         best_dev_metrics = current_dev_metrics
         test_metrics_at_best_dev = test_metrics_at_current_dev
-        trainer.save(os.path.join(model_save_dir, 'best_model.pt'), epoch)
+        print(os.path.join(model_save_dir, opt['id'], 'best_model.pt'))
+        trainer.save(os.path.join(model_save_dir, opt['id'], 'best_model.pt'), epoch)
         print("New best model saved")
         file_logger.log("new best model saved at epoch {}: {:.2f}\t{:.2f}\t{:.2f}" \
                         .format(epoch, test_p * 100, test_r * 100, test_f1 * 100))
