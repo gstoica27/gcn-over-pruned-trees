@@ -26,6 +26,8 @@ parser.add_argument('--config_dir', type=str)
 args = parser.parse_args()
 
 cwd = os.getcwd()
+on_server = 'Desktop' not in cwd
+config_path = os.path.join(cwd, 'configs', f'{"server" if on_server else "local"}_config.yaml')
 
 def add_kg_model_params(cfg_dict, cwd):
     link_prediction_cfg_file = os.path.join(cwd, 'configs', 'link_prediction_configs.yaml')
@@ -37,7 +39,6 @@ def add_kg_model_params(cfg_dict, cwd):
     params['freeze_network'] = cfg_dict['link_prediction']['freeze_network']
     return params
 
-config_path = os.path.join(args.config_dir, 'config.json')
 with open(config_path, 'r') as file:
     cfg_dict = yaml.load(file)
 
