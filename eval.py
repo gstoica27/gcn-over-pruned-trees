@@ -58,7 +58,7 @@ label2id = constant.LABEL_TO_ID
 opt['num_class'] = len(label2id)
 
 # load vocab
-vocab_file = os.path.join(cfg_dict['save_dir'], 'vocab.pkl')
+vocab_file = opt['vocab_dir'] + '/vocab.pkl'
 vocab = Vocab(vocab_file, load=True)
 assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
 opt['vocab_size'] = vocab.size
