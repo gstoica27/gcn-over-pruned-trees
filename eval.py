@@ -101,6 +101,8 @@ init_time = time.time()
 label2id = constant.LABEL_TO_ID
 opt['num_class'] = len(label2id)
 opt['id'] = create_model_name(cfg_dict)
+model_load_dir = opt['save_dir'] + '/' + opt['id']
+print(model_load_dir)
 # load vocab
 vocab_file = opt['vocab_dir'] + '/vocab.pkl'
 vocab = Vocab(vocab_file, load=True)
@@ -111,7 +113,7 @@ opt['subject_indices'] = vocab.subj_idxs
 opt['object_indices'] = vocab.obj_idxs
 
 # load opt
-model_file = os.path.join(cfg_dict['save_dir'], args.model_path)
+model_file = os.path.join(model_load_dir, args.model_path)
 print("Loading model from {}".format(model_file))
 # opt = torch_utils.load_config(model_file)
 trainer = GCNTrainer(opt)
