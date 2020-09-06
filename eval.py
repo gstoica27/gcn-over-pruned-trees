@@ -69,6 +69,7 @@ trainer.load(model_file)
 vocab_file = os.path.join(cfg_dict['save_dir'], 'vocab.pkl')
 vocab = Vocab(vocab_file, load=True)
 assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
+opt['vocab_size'] = vocab.size
 
 # load data
 data_file = opt['data_dir'] +f'/{opt["data_type"]}/test_{opt["version"]}.json'
