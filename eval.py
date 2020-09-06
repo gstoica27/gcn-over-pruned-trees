@@ -63,6 +63,8 @@ vocab = Vocab(vocab_file, load=True)
 opt['vocab_size'] = vocab.size
 assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
 
+opt['object_indices'] = vocab.obj_idxs
+
 # load opt
 model_file = os.path.join(cfg_dict['save_dir'], args.model_path)
 print("Loading model from {}".format(model_file))
