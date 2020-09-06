@@ -59,19 +59,19 @@ opt['num_class'] = len(label2id)
 
 
 # load opt
-model_file = os.path.join(cfg_dict['model_save_dir'], args.model_path)
+model_file = os.path.join(cfg_dict['save_dir'], args.model_path)
 print("Loading model from {}".format(model_file))
 # opt = torch_utils.load_config(model_file)
 trainer = GCNTrainer(opt)
 trainer.load(model_file)
 
 # load vocab
-vocab_file = os.path.join(cfg_dict['model_save_dir'], 'vocab.pkl')
+vocab_file = os.path.join(cfg_dict['save_dir'], 'vocab.pkl')
 vocab = Vocab(vocab_file, load=True)
 assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
 
 # load data
-data_file = opt['data_dir'] + f'/{opt["data_type"]}_test.json'
+data_file = opt['data_dir'] +f'/{opt["data_type"]}/test_{opt["version"]}.json'
 print("Loading data from {} with batch size {}...".format(data_file, opt['batch_size']))
 batch = DataLoader(data_file, opt['batch_size'], opt, vocab, evaluation=True)
 
