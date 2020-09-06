@@ -62,7 +62,8 @@ vocab_file = opt['vocab_dir'] + '/vocab.pkl'
 vocab = Vocab(vocab_file, load=True)
 opt['vocab_size'] = vocab.size
 assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
-
+# Add subject/object indices
+opt['subject_indices'] = vocab.subj_idxs
 opt['object_indices'] = vocab.obj_idxs
 
 # load opt
