@@ -144,7 +144,29 @@ for i, b in enumerate(batch_iter):
     all_probs += probs
 
 predictions = [id2label[p] for p in predictions]
-p, r, f1 = scorer.score(batch.gold(), predictions, verbose=True)
+metrics, other_data = scorer.score(batch.gold(), predictions, verbose=True)
+p = metrics['precision']
+r = metrics['recall']
+f1 = metrics['f1']
+
+wrong_indices = other_data['wrong_indices']
+correct_indices = other_data['correct_indices']
+wrong_predictions = other_data['wrong_predictions']
+
+raw_data = np.array(batch.raw_data)
+wrong_data = raw_data[wrong_indices]
+correct_data = raw_data[correct_indices]
+
+wrong_ids = [d['id'] for d in wrong_data]
+correct_ids = [d['id'] for d in correct_data]
+
+data_save_dir = os.path.join(opt['test_save_dir'], 'patched_full')
+os.makedirs(data_save_dir, exist_ok=True)
+print('saving to: {}'.format(data_save_dir))
+np.savetxt(os.path.join(data_save_dir, 'correct_ids.txt'), correct_ids, fmt='%s')
+np.savetxt(os.path.join(data_save_dir, 'wrong_ids.txt'), wrong_ids, fmt='%s')
+np.savetxt(os.path.join(data_save_dir, 'wrong_predictions.txt'), wrong_predictions, fmt='%s')
+
 print("Result: {:.2f}\t{:.2f}\t{:.2f}".format(p,r,f1))
 print(Counter([relation for relation in predictions]))
 print("Evaluation ended.")
