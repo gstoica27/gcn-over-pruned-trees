@@ -169,7 +169,7 @@ np.savetxt(os.path.join(data_save_dir, 'wrong_ids.txt'), wrong_ids, fmt='%s')
 np.savetxt(os.path.join(data_save_dir, 'wrong_predictions.txt'), wrong_predictions, fmt='%s')
 
 id2preds = {d['id']: pred for d, pred in zip(raw_data, predictions)}
-json.dump(id2preds, open(os.path.join(data_save_dir, 'id2preds.json')))
+json.dump(id2preds, open(os.path.join(data_save_dir, 'id2preds.json'), 'w'))
 
 print("Result: {:.2f}\t{:.2f}\t{:.2f}".format(p,r,f1))
 print(Counter([relation for relation in predictions]))
