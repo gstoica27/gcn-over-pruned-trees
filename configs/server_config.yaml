@@ -19,7 +19,7 @@ pooling_l2: 0.003
 mlp_layers: 2
 no_adj: False
 rnn: True
-rnn_hidden: 200
+rnn_hidden: 300
 rnn_layers: 1
 rnn_dropout: 0.5
 lr: 0.3 # Applies to SGD and Adagrad
@@ -39,7 +39,7 @@ cuda: True
 cpu: False # Ignore CUDA.
 load: False
 model_file:
-data_type: unpatched
+data_type: patched
 version: full
 link_prediction:
 #  model: 'ConvE'
