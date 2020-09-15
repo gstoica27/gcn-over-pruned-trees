@@ -121,7 +121,10 @@ trainer = GCNTrainer(opt)
 trainer.load(model_file)
 
 # load data
-data_file = opt['data_dir'] +f'/{opt["data_type"]}/test_{opt["version"]}.json'
+if opt['eval_file'] is not None:
+    data_file = opt['eval_file']
+else:
+    data_file = opt['data_dir'] +f'/{opt["data_type"]}/test_{opt["version"]}.json'
 print("Loading data from {} with batch size {}...".format(data_file, opt['batch_size']))
 batch = DataLoader(data_file, opt['batch_size'], opt, vocab, evaluation=True)
 
