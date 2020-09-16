@@ -236,9 +236,9 @@ formatted_data = []
 for instance_id, pred, gold in zip(ids, predictions, batch.gold()):
     formatted_data.append(
         {
-            'id': instance_id,
-            'label_true': gold,
-            'label_pred': pred
+            "id": instance_id.replace("'", '"'),
+            "label_true": gold.replace("'", '"'),
+            "label_pred": pred.replace("'", '"')
         }
     )
 
