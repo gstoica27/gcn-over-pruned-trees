@@ -131,7 +131,7 @@ def compute_structure_errors(parts, preds, gold_labels):
             structure_errors['sentlen>30'].append(is_correct)
     print('Structure Errors:')
     for structure_name, error_list in structure_errors.items():
-        accuracy = np.mean(error_list)
+        accuracy = round(np.mean(error_list) * 100., 4)
         print('{} | Accuracy: {} | Correct: {} | Wrong: {} | Total: {} '.format(
             structure_name, accuracy, sum(error_list), len(error_list) - sum(error_list), len(error_list)
         ))
@@ -267,7 +267,7 @@ json.dump(formatted_data, open(os.path.join(data_save_dir, 'cgcn_tacred.jsonl'),
 
 with open(os.path.join(data_save_dir, 'cgcn_tacred.jsonl'), 'w') as handle:
     for instance in formatted_data:
-            line = '{}\n'.format(instance)
+            line = "{}\n".format(instance)
             handle.write(line)
 
 id2preds = {d['id']: pred for d, pred in zip(raw_data, predictions)}
