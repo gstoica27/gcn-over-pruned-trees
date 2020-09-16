@@ -117,7 +117,6 @@ def compute_structure_errors(parts, preds, gold_labels):
     argdists = parts['argdists']
     sentlens = parts['sentlens']
     for i in range(len(argdists)):
-        if gold_labels[i] == 'no_relation': continue
         argdist = argdists[i]
         sentlen = sentlens[i]
         pred = preds[i]
@@ -232,6 +231,17 @@ compute_ranks(all_probs, batch.gold())
 structure_parts = compute_structure_parts(batch.raw_data)
 compute_structure_errors(structure_parts, preds=predictions, gold_labels=batch.gold())
 
+ids = [instance['id'] for instance in batch.raw_data]
+formatted_data = []
+for instance_id, pred, gold in zip(ids, predictions, batch.gold()):
+    formatted_data.append(
+        {
+            'id': instance_id,
+            'label_true': gold,
+            'label_pred': pred
+        }
+    )
+
 p = metrics['precision']
 r = metrics['recall']
 f1 = metrics['f1']
@@ -253,7 +263,7 @@ print('saving to: {}'.format(data_save_dir))
 np.savetxt(os.path.join(data_save_dir, 'correct_ids.txt'), correct_ids, fmt='%s')
 np.savetxt(os.path.join(data_save_dir, 'wrong_ids.txt'), wrong_ids, fmt='%s')
 np.savetxt(os.path.join(data_save_dir, 'wrong_predictions.txt'), wrong_predictions, fmt='%s')
-
+json.dump(formatted_data, open(os.path.join(data_save_dir, 'cgcn_tacred.jsonl')))
 id2preds = {d['id']: pred for d, pred in zip(raw_data, predictions)}
 json.dump(id2preds, open(os.path.join(data_save_dir, 'id2preds.json'), 'w'))
 
