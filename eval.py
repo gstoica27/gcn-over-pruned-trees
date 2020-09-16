@@ -263,7 +263,7 @@ print('saving to: {}'.format(data_save_dir))
 np.savetxt(os.path.join(data_save_dir, 'correct_ids.txt'), correct_ids, fmt='%s')
 np.savetxt(os.path.join(data_save_dir, 'wrong_ids.txt'), wrong_ids, fmt='%s')
 np.savetxt(os.path.join(data_save_dir, 'wrong_predictions.txt'), wrong_predictions, fmt='%s')
-json.dump(formatted_data, open(os.path.join(data_save_dir, 'cgcn_tacred.jsonl')))
+json.dump(formatted_data, open(os.path.join(data_save_dir, 'cgcn_tacred.jsonl'), 'w'))
 id2preds = {d['id']: pred for d, pred in zip(raw_data, predictions)}
 json.dump(id2preds, open(os.path.join(data_save_dir, 'id2preds.json'), 'w'))
 
