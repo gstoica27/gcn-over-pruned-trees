@@ -117,6 +117,7 @@ def compute_structure_errors(parts, preds, gold_labels):
     argdists = parts['argdists']
     sentlens = parts['sentlens']
     for i in range(len(argdists)):
+        if gold_labels[i] == 'no_relation': continue
         argdist = argdists[i]
         sentlen = sentlens[i]
         pred = preds[i]
