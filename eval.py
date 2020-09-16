@@ -98,6 +98,46 @@ def compute_ranks(probs, gold_labels, hits_to_compute=(1, 3, 5, 10, 20, 50)):
         print('{}: {}'.format(name, value))
     return name2ranks
 
+def compute_structure_parts(data):
+    argdists = []
+    sentlens = []
+    for instance in data:
+        ss, se = instance['subj_start'], instance['subj_end']
+        os, oe = instance['obj_start'], instance['obj_end']
+        sentlens.append(len(instance['token']))
+        if ss > oe:
+            argdist = ss - oe
+        else:
+            argdist = os - se
+        argdists.append(argdist)
+    return {'argdists': argdists, 'sentlens': sentlens}
+
+def compute_structure_errors(parts, preds, gold_labels):
+    structure_errors = {'argdist=1': [], 'argdist>10': [], 'sentlen>30': []}
+    argdists = parts['argdists']
+    sentlens = parts['sentlens']
+    for i in range(len(argdists)):
+        argdist = argdists[i]
+        sentlen = sentlens[i]
+        pred = preds[i]
+        gold = gold_labels[i]
+        is_correct = pred == gold
+
+        if argdist <= 1:
+            structure_errors['argdist=1'].append(is_correct)
+        if argdist > 10:
+            structure_errors['argdist>10'].append(is_correct)
+        if sentlen > 30:
+            structure_errors['sentlen>30'].append(is_correct)
+    print('Structure Errors:')
+    for structure_name, error_list in structure_errors.items():
+        accuracy = np.mean(error_list)
+        print('{} | Accuracy: {} | Correct: {} | Wrong: {} | Total: {} '.format(
+            structure_name, accuracy, sum(error_list), len(error_list) - sum(error_list), len(error_list)
+        ))
+    return structure_errors
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str, default='best_model.pt', help='Name of the model file.')
 
@@ -187,6 +227,9 @@ predictions = [id2label[p] for p in predictions]
 metrics, other_data = scorer.score(batch.gold(), predictions, verbose=True)
 
 compute_ranks(all_probs, batch.gold())
+
+structure_parts = compute_structure_parts(batch.raw_data)
+compute_structure_errors(structure_parts, preds=predictions, gold_labels=batch.gold())
 
 p = metrics['precision']
 r = metrics['recall']
