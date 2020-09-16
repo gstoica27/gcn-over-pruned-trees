@@ -62,6 +62,42 @@ def create_model_name(cfg_dict):
     aggregate_name = os.path.join(*param_name_list)
     return aggregate_name
 
+def compute_ranks(probs, gold_labels, hits_to_compute=(1, 3, 5, 10, 20, 50)):
+    gold_ids = np.array([constant.LABEL_TO_ID[label] for label in gold_labels])
+    all_probs = np.stack(probs, axis=0)
+    sorted_args = np.argsort(-all_probs, axis=-1)
+    ranks = []
+    assert len(sorted_args) == len(gold_labels)
+    for row_args, gold_label in zip(sorted_args, gold_ids):
+        if id2label[gold_label] == 'no_relation':
+            continue
+        rank = int(np.where(row_args == gold_label)[0]) + 1
+        ranks.append(rank)
+    # print(Counter(ranks))
+    ranks = np.array(ranks)
+    hits = {hits_level: [] for hits_level in hits_to_compute}
+    name2ranks = {}
+    for hit_level in hits_to_compute:
+        valid_preds = np.sum(ranks <= hit_level)
+        hits[hit_level] = valid_preds / len(ranks)
+
+    for hit_level in hits:
+        name = 'HITs@{}'.format(int(hit_level))
+        name2ranks[name] = hits[hit_level]
+
+    mr = np.mean(ranks)
+    mrr = np.mean(1. / ranks)
+    name2ranks['MRR'] = mrr
+    name2ranks['MR'] = mr
+    print('RANKS:')
+    for name, metric in name2ranks.items():
+        if 'HIT' in name or 'MRR' in name:
+            value = round(metric * 100, 2)
+        else:
+            value = round(metric, 2)
+        print('{}: {}'.format(name, value))
+    return name2ranks
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str, default='best_model.pt', help='Name of the model file.')
 
@@ -149,6 +185,9 @@ for i, b in enumerate(batch_iter):
 
 predictions = [id2label[p] for p in predictions]
 metrics, other_data = scorer.score(batch.gold(), predictions, verbose=True)
+
+compute_ranks(all_probs, batch.gold())
+
 p = metrics['precision']
 r = metrics['recall']
 f1 = metrics['f1']
