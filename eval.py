@@ -257,7 +257,8 @@ correct_data = raw_data[correct_indices]
 wrong_ids = [d['id'] for d in wrong_data]
 correct_ids = [d['id'] for d in correct_data]
 
-data_save_dir = os.path.join(opt['test_save_dir'], 'unpatched_orig')
+dataset_name = 'tacred-{}-{}'.format(cfg_dict['data_type'], cfg_dict['version'])
+data_save_dir = os.path.join(opt['test_save_dir'], dataset_name)
 os.makedirs(data_save_dir, exist_ok=True)
 print('saving to: {}'.format(data_save_dir))
 np.savetxt(os.path.join(data_save_dir, 'correct_ids.txt'), correct_ids, fmt='%s')
@@ -265,7 +266,7 @@ np.savetxt(os.path.join(data_save_dir, 'wrong_ids.txt'), wrong_ids, fmt='%s')
 np.savetxt(os.path.join(data_save_dir, 'wrong_predictions.txt'), wrong_predictions, fmt='%s')
 json.dump(formatted_data, open(os.path.join(data_save_dir, 'cgcn_tacred.jsonl'), 'w'))
 
-with open(os.path.join(data_save_dir, 'cgcn_tacred.jsonl'), 'w') as handle:
+with open(os.path.join(data_save_dir, 'cgcn_retacred.jsonl'), 'w') as handle:
     for instance in formatted_data:
             line = "{}\n".format(instance)
             handle.write(line)
