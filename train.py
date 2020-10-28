@@ -196,7 +196,8 @@ for epoch in range(1, opt['num_epoch']+1):
     train_predictions = [id2label[p] for p in train_predictions]
     train_eval_loss = train_eval_loss / train_batch.num_examples * opt['batch_size']
 
-    train_p, train_r, train_f1 = scorer.score(train_batch.gold(), train_predictions)
+    train_metrics, _ = scorer.score(train_batch.gold(), train_predictions)
+    train_p, train_r, train_f1 = train_metrics['f1'], train_metrics['recall'], train_metrics['precision']
     print("epoch {}: train_loss = {:.6f}, train_eval_loss = {:.6f}, dev_f1 = {:.4f}".format(
         epoch, train_loss, train_eval_loss, train_f1))
     train_score = train_f1
@@ -213,7 +214,8 @@ for epoch in range(1, opt['num_epoch']+1):
     dev_predictions = [id2label[p] for p in dev_predictions]
     dev_loss = dev_loss / dev_batch.num_examples * opt['batch_size']
 
-    dev_p, dev_r, dev_f1 = scorer.score(dev_batch.gold(), dev_predictions)
+    dev_metrics, _ = scorer.score(dev_batch.gold(), dev_predictions)
+    dev_p, dev_r, dev_f1 = dev_metrics['f1'], dev_metrics['recall'], dev_metrics['precision']
     print("epoch {}: train_loss = {:.6f}, dev_loss = {:.6f}, dev_f1 = {:.4f}".format(epoch, train_loss, dev_loss, dev_f1))
     dev_score = dev_f1
     file_logger.log("{}\t{:.6f}\t{:.6f}\t{:.4f}\t{:.4f}".format(epoch, train_loss, dev_loss, dev_score, max([dev_score] + dev_score_history)))
@@ -226,7 +228,8 @@ for epoch in range(1, opt['num_epoch']+1):
         test_predictions += preds
     test_predictions = [id2label[p] for p in test_predictions]
 
-    test_p, test_r, test_f1 = scorer.score(test_batch.gold(), test_predictions)
+    test_metrics, _ = scorer.score(test_batch.gold(), test_predictions)
+    test_p, test_r, test_f1 = test_metrics['f1'], test_metrics['recall'], test_metrics['precision']
     test_metrics_at_current_dev = {'f1': test_f1, 'precision': test_p, 'recall': test_r}
     
     if best_dev_metrics['f1'] < current_dev_metrics['f1']:
