@@ -241,17 +241,17 @@ for epoch in range(1, opt['num_epoch']+1):
                         .format(epoch, test_p * 100, test_r * 100, test_f1 * 100))
 
         # Compute Confusion Matrices over triples excluded in Training
-        test_preds = np.array(test_predictions)
-        test_gold = np.array(test_batch.gold())
-        dev_preds = np.array(dev_predictions)
-        dev_gold = np.array(dev_batch.gold())
-        test_confusion_matrix = scorer.compute_confusion_matrices(ground_truth=test_gold,
-                                                                  predictions=test_preds)
-        dev_confusion_matrix = scorer.compute_confusion_matrices(ground_truth=dev_gold,
-                                                                 predictions=dev_preds)
-        print("Saving Excluded Triple Confusion Matrices...")
-        with open(test_confusion_save_file, 'wb') as handle:
-            pickle.dump(test_confusion_matrix, handle)
+        # test_preds = np.array(test_predictions)
+        # test_gold = np.array(test_batch.gold())
+        # dev_preds = np.array(dev_predictions)
+        # dev_gold = np.array(dev_batch.gold())
+        # test_confusion_matrix = scorer.compute_confusion_matrices(ground_truth=test_gold,
+        #                                                           predictions=test_preds)
+        # dev_confusion_matrix = scorer.compute_confusion_matrices(ground_truth=dev_gold,
+        #                                                          predictions=dev_preds)
+        # print("Saving Excluded Triple Confusion Matrices...")
+        # with open(test_confusion_save_file, 'wb') as handle:
+        #     pickle.dump(test_confusion_matrix, handle)
 
     print("Best Dev Metrics | F1: {} | Precision: {} | Recall: {}".format(
         best_dev_metrics['f1'], best_dev_metrics['precision'], best_dev_metrics['recall']
