@@ -48,7 +48,7 @@ def create_model_name(cfg_dict):
 
     if cfg_dict['link_prediction'] is not None:
         kglp_task_cfg = cfg_dict['link_prediction']
-        jrrelp_params = ['label_smoothing', 'lambda', 'free_network',
+        jrrelp_params = ['label_smoothing', 'lambda', 'freeze_network',
                        'with_relu', 'without_observed',
                        'without_verification', 'without_no_relation']
         jrrelp_name = generate_param_list(jrrelp_params, kglp_task_cfg, prefix='jrrelp')
