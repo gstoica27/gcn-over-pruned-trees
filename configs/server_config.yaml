@@ -1,5 +1,5 @@
 data_dir: '/zfsauton3/home/gis/research/relation_extraction/gcn-over-pruned-trees/dataset/full_tacred/tacred/data/json/relabeled'
-eval_file: /zfsauton3/home/gis/research/relation_extraction/gcn-over-pruned-trees/dataset/full_tacred/tacred/data/json/test.json
+eval_file: #/zfsauton3/home/gis/research/relation_extraction/gcn-over-pruned-trees/dataset/full_tacred/tacred/data/json/test.json
 vocab_dir: '/zfsauton3/home/gis/research/relation_extraction/gcn-over-pruned-trees/dataset/full_tacred/tacred/data/vocab'
 test_save_dir: '/home/scratch/gis/tacred_test_performances'
 save_dir: '/home/scratch/gis/saved_models'
@@ -20,7 +20,7 @@ pooling_l2: 0.003
 mlp_layers: 2
 no_adj: False
 rnn: True
-rnn_hidden: 200
+rnn_hidden: 300
 rnn_layers: 1
 rnn_dropout: 0.5
 lr: 0.3 # Applies to SGD and Adagrad
@@ -45,7 +45,7 @@ version: full
 link_prediction:
   model: 'ConvE'
   label_smoothing: .1
-  lambda: .1
+  lambda: 1.
   freeze_network: False
   with_relu: True
   without_observed: False
