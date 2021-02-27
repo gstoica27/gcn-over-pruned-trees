@@ -138,7 +138,7 @@ if opt['use_bert_embeddings']:
 else:
     embeddings_file = None
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt, vocab, evaluation=False, bert_embeddings=embeddings_file)
+train_batch = DataLoader(opt['data_dir'] + '/train_0.1.json', opt['batch_size'], opt, vocab, evaluation=False, bert_embeddings=embeddings_file)
 dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt, vocab, evaluation=True, bert_embeddings=embeddings_file)
 test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt, vocab, evaluation=True, bert_embeddings=embeddings_file)
 

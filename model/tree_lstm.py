@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
-from torchnlp.nn import *
+#from torchnlp.nn import *
 from model.dropouts import VariationalDropout
 
 
